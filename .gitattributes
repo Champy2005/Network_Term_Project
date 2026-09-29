@@ -1,4 +1,10 @@
 * text=auto
+.clang-format text eol=lf
+.clang-tidy text eol=lf
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+*.gitkeep text eol=lf
 *.cpp text eol=lf
 *.hpp text eol=lf
 *.proto text eol=lf

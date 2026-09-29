@@ -1,5 +1,5 @@
 #include "chat.pb.h"
-#include "chat/framing.hpp"
+#include "chat/protocol/framing.hpp"
 
 #include <gtest/gtest.h>
 

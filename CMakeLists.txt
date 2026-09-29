@@ -31,10 +31,10 @@ target_compile_features(chat_proto PUBLIC cxx_std_20)
 target_include_directories(chat_proto PUBLIC "${CHAT_GENERATED_DIR}")
 target_link_libraries(chat_proto PUBLIC protobuf::libprotobuf)
 
-add_library(chat_framing STATIC shared/src/framing.cpp)
+add_library(chat_framing STATIC src/protocol/framing.cpp)
 add_library(chat::framing ALIAS chat_framing)
 target_compile_features(chat_framing PUBLIC cxx_std_20)
-target_include_directories(chat_framing PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/shared/include")
+target_include_directories(chat_framing PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 add_library(chat_shared INTERFACE)
 add_library(chat::shared ALIAS chat_shared)
@@ -72,8 +72,8 @@ if(BUILD_TESTING)
     find_package(GTest CONFIG REQUIRED)
 
     add_executable(chat_tests
-        tests/framing_test.cpp
-        tests/protocol_test.cpp
+        tests/unit/framing_test.cpp
+        tests/unit/protocol_test.cpp
     )
     target_link_libraries(chat_tests PRIVATE chat::shared GTest::gtest_main)
     chat_set_project_warnings(chat_tests)

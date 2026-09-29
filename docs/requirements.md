@@ -1,7 +1,8 @@
 # Assignment requirements and evidence plan
 
-Source: the supplied *Term Project: Socket Programming* brief (pages 1-2) and
-*Implementation Explanation* slide template (pages 1-20). The assignment
+Source: the supplied [*Term Project: Socket Programming* brief](assignment/socket-programming-brief.pdf)
+(pages 1-2) and [*Implementation Explanation* slide template](assignment/implementation-explanation-template.pdf)
+(pages 1-20). The assignment
 allows any programming language or platform, but requires separate client and
 server program files. The current repository is at **Stage 1** (schema,
 framing, and tests). **Every end-to-end requirement below is pending**; the

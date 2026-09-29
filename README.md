@@ -1,63 +1,60 @@
-# Socket chat term project
+# Socket Chat
 
-A C++20 foundation for the computer-network chat assignment. The current
-checkpoint is **Stages 0-1**: CMake/vcpkg setup, a Protocol Buffers schema,
-four-byte length framing, and automated tests. There is no runnable server or
-client yet, so this repository does not yet demonstrate the assignment's chat
-requirements. See [architecture and protocol](docs/architecture.md) for the
-wire format, intended runtime design, and staged plan. The
-[requirements checklist](docs/requirements.md) maps the assignment's graded
-behaviors to later implementation and demo evidence.
+A C++20 computer networks term project for a multi-client chat application.
+The intended system uses a reusable headless client library and a separate
+server program. The assignment's required behavior is recorded in the
+[requirements matrix](docs/requirements.md); the C++ stack is our team's design
+choice, not an assignment mandate.
 
-## Build and test
+> **Current status:** Stage 0-1 is complete: build setup, a typed Protobuf
+> schema, bounded length-prefixed framing, and unit tests. There is **no
+> runnable chat server or client yet**. [Progress](docs/progress.md) tracks the
+> remaining work; [Stage 2](docs/plan.md) starts with TCP Ping/Pong.
 
-Requirements: CMake 3.24 or newer, Ninja, a C++20 compiler, and a local
-[vcpkg](https://github.com/microsoft/vcpkg) installation. The manifest installs
-Protobuf and GoogleTest for Stage 1, plus Boost.Asio, OpenSSL, and SQLite for
-later stages. On Windows, open an **x64 Visual Studio Developer
-PowerShell** (or Developer Command Prompt) so Ninja can find MSVC, then run
-these commands from the repository root:
+## Start here
 
-```powershell
-$env:VCPKG_ROOT = 'C:\vcpkg' # replace with your local vcpkg directory
-cmake --preset debug
-cmake --build --preset debug
-ctest --preset debug
-```
+1. Follow the setup guide for [Windows](docs/setup/windows.md),
+   [macOS](docs/setup/macos.md), or [Linux](docs/setup/linux.md).
+2. From the repository root, configure, build, and test:
 
-The `debug`, `release`, and `asan` preset names each work with `cmake --preset`,
-`cmake --build --preset`, and `ctest --preset`. The `asan` preset enables
-AddressSanitizer with MSVC, or AddressSanitizer and UndefinedBehaviorSanitizer
-with GCC/Clang where supported. On Windows, run `ctest --preset asan` in the
-Visual Studio developer environment so the MSVC sanitizer runtime is on
-`PATH`. Build output is under `build/<preset>`.
+   ```text
+   cmake --preset debug
+   cmake --build --preset debug
+   ctest --preset debug
+   ```
 
-The Stage 1 tests cover big-endian encoding, partial headers and payloads,
-multiple frames per read, empty and oversized frame rejection, incomplete
-frames at EOF, and Protobuf round-trip and malformed-payload parsing. Passing
-them verifies the framing and schema foundation, not network behavior.
+3. Read the [project overview](docs/overview.md),
+   [architecture](docs/architecture.md), and [contribution guide](docs/contributing.md)
+   before starting a milestone.
 
-## Repository layout
+The first vcpkg configure downloads and builds dependencies and can take several
+minutes. `debug`, `release`, and `asan` are available preset names. The
+`asan` tests on Windows must run from a Visual Studio developer shell so the
+sanitizer runtime is on `PATH`. Generated Protobuf code and build outputs stay
+under `build/` and are not committed.
 
-| Path | Purpose |
-| --- | --- |
-| `proto/chat.proto` | v1 typed `Envelope` and chat payload definitions. |
-| `shared/include/chat/framing.hpp`, `shared/src/framing.cpp` | Standalone frame encoder and incremental decoder. |
-| `tests/` | GoogleTest coverage for framing and Protobuf parsing. |
-| `server/`, `client/`, `cli/` | Reserved source boundaries for later checkpoints; no executables exist yet. |
-| `docs/architecture.md` | Current status, protocol rules, and later-stage design. |
-| `docs/requirements.md` | Assignment criteria, planned stages, and demo evidence. |
-| `certs/README.md` | Certificate handling plan for the later TLS stage. |
+## Repository map
 
-The frame format is a four-byte unsigned big-endian payload length followed
-by a serialized `chat.protocol.Envelope`. The allowed payload size is 1 to
-1,048,576 bytes. Frame decoding and Protobuf parsing are separate steps.
+| Path | Purpose | Current state |
+| --- | --- | --- |
+| `proto/` | Versioned application message schema | Implemented |
+| `include/chat/protocol/`, `src/protocol/` | Public framing API and codec | Implemented |
+| `include/chat/client/`, `src/client/` | Headless client SDK | Reserved |
+| `include/chat/server/`, `src/server/` | Server sessions, routing, state | Reserved |
+| `apps/server/`, `apps/cli/` | Separate server and CLI entry points | Reserved |
+| `tests/unit/`, `tests/integration/` | Unit and future network tests | Unit tests implemented |
+| `docs/` | Setup, architecture, plan, testing, and assignment sources | Available |
+| `certs/` | Future local TLS certificate guidance | Guidance only |
 
-## Next implementation checkpoint
+## Project direction
 
-Stage 2 will add a separate plaintext TCP server and CLI client and prove
-framed `Ping`/`Pong` across a socket. The later stages add session management,
-login, private and group rooms, presence, history, reconnect, and TLS. The
-assignment ultimately requires at least two clients on different physical
-computers, plus a GUI with a message display and text input per room. An AI
-feature is also required for the assignment's special-feature section.
+The planned path is persistent TCP sockets with Boost.Asio, Protobuf messages
+inside four-byte big-endian length frames, a single-server hub that authorizes
+direct and group delivery, and a GUI built on the headless client API. TLS 1.3,
+SQLite/WAL history, acknowledgements, and reconnect recovery are later
+milestones. An AI feature is required for the assignment's special-feature
+section and will follow the fundamental chat requirements. NATS, Redis,
+PostgreSQL, QUIC, and end-to-end encryption are outside the initial build.
+
+See the [documentation index](docs/README.md) for the full plan, test matrix,
+manual demonstration steps, and current progress.

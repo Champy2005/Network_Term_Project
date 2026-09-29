@@ -1,4 +1,4 @@
-#include "chat/framing.hpp"
+#include "chat/protocol/framing.hpp"
 
 #include <algorithm>
 #include <utility>
