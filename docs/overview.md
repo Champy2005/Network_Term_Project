@@ -9,10 +9,21 @@ physical computers for the demonstration. Users need distinct names, a live
 connected-user list, separate private and group chat rooms, and group discovery
 with voluntary joining and member-only delivery.
 
-**Current checkpoint: Stage 1 only.** This repository has the C++20 build
-foundation, a Protocol Buffers schema, a bounded length-frame codec, and unit
-tests. It cannot connect clients or send chat messages yet. The planned design
-and future milestones in these docs are not implemented behavior.
+**Current checkpoint: Stages 0-13, automated acceptance.** This repository has
+the C++20 build foundation, framed Protocol Buffers TCP, separate server/CLI
+programs, bounded sessions, unique active login names, private direct rooms,
+voluntary group membership, and presence/group snapshots. A minimum headless
+chat API exposes operations and typed events. The Windows GUI now adds user/group
+navigation, room transcripts/drafts, and create/self-join/send controls through
+a portable networking worker/model. SQLite/WAL stores messages and provides
+bounded authorized pages plus explicit durable participant resume through the
+headless API. Periodic worker heartbeats and server idle timers clean up stale
+sessions. Stable message IDs/sequences and explicit saved-key retries are also
+implemented. Bounded worker recovery resumes identity and replays missing room
+sequences while preserving GUI drafts/transcripts. The suite has 202
+unit/socket/native-control cases. Verified TLS 1.3 and the persistent worker-backed CLI are implemented. Manual GUI
+walkthroughs and the physical-network
+demonstration remain pending; verified results are in [progress](progress.md).
 
 The [assignment brief](assignment/socket-programming-brief.pdf) defines the
 graded requirements; the [implementation-explanation template](assignment/implementation-explanation-template.pdf)
@@ -33,8 +44,8 @@ fundamentals must pass before Part 3 special features are graded. See the
 5. Open a group room, send text, and see messages only if they belong to that
    group. A nonmember must not receive the group's messages.
 
-A later GUI must provide a message view and text input/send control for each
-private and group room. The special-feature part of the assignment also
+The Windows GUI provides a message view and text input/send control for each
+private and group room; see the [GUI guide](setup/gui.md). The special-feature part of the assignment also
 requires at least one AI feature. The specific AI feature has not been chosen.
 
 ## Chosen engineering direction
@@ -42,9 +53,9 @@ requires at least one AI feature. The specific AI feature has not been chosen.
 The team selected C++20, CMake and vcpkg, Boost.Asio TCP sockets, Protocol
 Buffers, and a four-byte big-endian length prefix. The planned server owns
 session identity, room and group state, membership checks, and routing. The
-client will eventually use a headless networking library so a GUI can work
-without handling sockets or Protobuf directly. SQLite/WAL history, heartbeat,
-reconnect support, and TLS 1.3 are later design goals. These technology choices
+client now has a minimum headless networking library so a GUI can work
+without handling sockets or Protobuf directly. SQLite/WAL history is implemented;
+heartbeats and automatic worker reconnect/sync and verified TLS 1.3 are implemented. These technology choices
 come from the team's planning discussion; the assignment requires the visible
 behavior and socket communication, not these particular libraries.
 
@@ -54,11 +65,14 @@ behavior and socket communication, not these particular libraries.
 | --- | --- |
 | [Requirements](requirements.md) | R1-R11, special-feature rules, and expected evidence. |
 | [Architecture](architecture.md) | Protocol, message flow, state ownership, reliability, and security assumptions. |
+| [Heartbeats](heartbeats.md) | Complete-request liveness, timers, settings, and failure cleanup. |
+| [Message reliability](reliability.md) | Receipts, explicit retries, schema migration, and acceptance limits. |
+| [TLS](tls.md) | Verified transport, explicit modes, certificate generation, and LAN setup. |
+| [CLI](cli.md) | Persistent commands, receipt output, input bounds, shutdown, and API ownership. |
 | [Plan](plan.md) | Stage-by-stage tasks and exit criteria. |
 | [Progress](progress.md) | What has been verified and what remains pending. |
 | [Testing](testing.md) | Automated tests and the eventual two-computer demonstration. |
 | [Contributing](contributing.md) | Team workflow and definition of done. |
 
-The assignment PDFs live in `docs/assignment/`. Certificate handling for the
-future TLS stage is outlined in the root
-[certificate notes](../certs/README.md).
+The assignment PDFs live in `docs/assignment/`. The [TLS guide](tls.md) covers
+certificate handling; generated development credentials remain ignored.

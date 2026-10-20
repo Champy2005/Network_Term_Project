@@ -1,3 +1,6 @@
+/** @file
+ * @brief Encode payload lengths and assemble frames across arbitrary TCP read boundaries.
+ */
 #include "chat/protocol/framing.hpp"
 
 #include <algorithm>

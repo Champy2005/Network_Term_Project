@@ -1,0 +1,9 @@
+[
+  {"label": "Windows: run chat GUI (build Debug first)", "command": "$ZED_WORKTREE_ROOT/build/debug/chat_gui.exe", "cwd": "$ZED_WORKTREE_ROOT"},
+  {"label": "Windows: prepare clangd", "command": "powershell", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/dev.ps1", "-Action", "prepare"], "cwd": "$ZED_WORKTREE_ROOT"},
+  {"label": "Windows: test Debug", "command": "powershell", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/dev.ps1", "-Action", "test"], "cwd": "$ZED_WORKTREE_ROOT"},
+  {"label": "C++: check clangd", "command": "python", "args": ["tools/check_clangd.py"], "cwd": "$ZED_WORKTREE_ROOT"},
+  {"label": "Docs: setup", "command": "python", "args": ["tools/docs.py", "setup"], "cwd": "$ZED_WORKTREE_ROOT"},
+  {"label": "Docs: build", "command": "python", "args": ["tools/docs.py", "build"], "cwd": "$ZED_WORKTREE_ROOT"},
+  {"label": "Docs: serve", "command": "python", "args": ["tools/docs.py", "serve"], "cwd": "$ZED_WORKTREE_ROOT"}
+]

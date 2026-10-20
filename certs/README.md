@@ -1,14 +1,12 @@
 # Certificates
 
-Stage 1 does not use TLS or load files from this directory. TLS 1.3 is planned
-after the plaintext TCP client and server work.
+Stage 12 implements TLS 1.3 with explicit CA trust and DNS/IP SAN verification.
+Run `python tools/dev_tls.py` from the repository root to create a development CA
+and server certificate in ignored `certs/development/`. The OpenSSL command-line
+executable must be on `PATH`; use `--openssl` for another path. Existing
+credentials are never overwritten.
 
-When TLS is implemented, keep the server private key out of version control.
-The client must verify the server certificate chain and the hostname it
-connected to; accepting every certificate would defeat the purpose of TLS.
-For a local demonstration, create a development CA, issue a certificate whose
-Subject Alternative Name matches the server's LAN hostname or IP address, and
-distribute only the CA certificate to clients. Document the generation and
-configuration commands alongside the TLS implementation.
-
-Do not commit private keys, passwords, or real deployment certificates here.
+Distribute only `ca.pem` to clients. Keep `ca.key` private/offline and `server.key`
+on the server. Do not commit keys, passwords, or deployment certificates. For LAN
+names/IPs, expiry, runnable commands, trust configuration, and tests, follow the
+[TLS setup guide](../docs/tls.md).

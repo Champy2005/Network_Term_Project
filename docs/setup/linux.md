@@ -70,8 +70,8 @@ ctest --preset debug
 ```
 
 The first configure can be slow while vcpkg builds dependencies. Success means
-`ctest` reports **100% tests passed**. There is currently one `chat_tests`
-executable for the framing and Protobuf unit cases. Output is in `build/debug`.
+`ctest` reports **100% tests passed**. `chat_tests` runs unit cases and
+`chat_integration_tests` runs real TCP Ping/Pong cases. Output is in `build/debug`.
 
 Repeat the command sequence with `release` for an optimized build. The
 optional `asan` preset enables AddressSanitizer and UndefinedBehaviorSanitizer
@@ -87,8 +87,10 @@ with GCC or Clang; use `debug` for the required first build.
 | vcpkg says a host build tool is missing | Install the tool named in its error; check the distro package names against the vcpkg host requirements. |
 | CMake keeps an old compiler or vcpkg path | Run `cmake --preset debug --fresh`, then build again. |
 
-This checkpoint only tests the protocol foundation. There is no runnable chat
-server or client yet. See the [project overview](../../README.md) and
+This checkpoint includes a runnable server, Ping/login CLI, and a headless chat
+API and portable worker/model. The first GUI adapter is Windows-only; it is
+omitted on Linux. Linux build verification remains pending.
+See the [project overview](../../README.md) and
 [architecture](../architecture.md).
 
 ## Tool references

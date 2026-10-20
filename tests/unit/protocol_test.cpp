@@ -1,3 +1,6 @@
+/** @file
+ * @brief Verify Protobuf round-trip through framing and malformed payload rejection.
+ */
 #include "chat.pb.h"
 #include "chat/protocol/framing.hpp"
 
@@ -10,6 +13,7 @@
 
 namespace {
 
+/// @brief Preserve envelope fields through serialization, framing, and parsing.
 TEST(ProtocolTest, ProtobufEnvelopeRoundTripsThroughFrame) {
     chat::protocol::Envelope outgoing;
     outgoing.set_protocol_version(1);
@@ -34,6 +38,7 @@ TEST(ProtocolTest, ProtobufEnvelopeRoundTripsThroughFrame) {
     EXPECT_EQ(incoming.login_request().username(), "alice");
 }
 
+/// @brief Reject bytes that cannot represent an Envelope.
 TEST(ProtocolTest, MalformedProtobufPayloadIsRejectedByParser) {
     // 0x0a says a length-delimited field follows, but no length byte exists.
     const std::vector<std::uint8_t> malformed{0x0a};

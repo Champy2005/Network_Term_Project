@@ -70,8 +70,8 @@ ctest --preset debug
 ```
 
 The first configure downloads and builds vcpkg dependencies and may take a
-while. Success means `ctest` reports **100% tests passed**. There is currently
-one `chat_tests` executable for the framing and Protobuf unit cases. Artifacts
+while. Success means `ctest` reports **100% tests passed**. `chat_tests` runs
+unit cases and `chat_integration_tests` runs real TCP Ping/Pong cases. Artifacts
 are in `build/debug`.
 
 The `release` preset follows the same command sequence. The optional `asan`
@@ -89,8 +89,10 @@ first build.
 | `Could not find toolchain file` | Re-export the correct `VCPKG_ROOT`; verify the `test -f` check above succeeds. |
 | CMake keeps an old compiler or vcpkg path | Run `cmake --preset debug --fresh`, then build again. |
 
-This checkpoint tests the protocol foundation. There is no runnable chat
-server or client yet. See the [project overview](../../README.md) and
+This checkpoint includes a runnable server, Ping/login CLI, and a headless chat
+API and portable worker/model. The first GUI adapter is Windows-only; it is
+omitted on macOS. macOS build verification remains pending.
+See the [project overview](../../README.md) and
 [architecture](../architecture.md).
 
 ## Tool references

@@ -26,6 +26,36 @@ C++ stack and milestone order are project decisions.
   change.
 - Do not commit generated build files, private keys, secrets, or real chat
   content in logs.
+- Keep short Doxygen file/API/test explanations current. Zed and VS Code share
+  `.clangd` and the Debug compiler database; do not commit personal include paths.
+  Use `python tools/check_clangd.py` and `python tools/docs.py build` to verify
+  C++ diagnostics and source documentation (see `docs/setup/tooling.md`).
+
+## Engineering workflow
+
+For substantial tasks read `.agents/skills/engineer/SKILL.md` and only its
+matching playbook/references. Focused skills live in `.agents/skills/`; the
+[workflow guide](docs/workflow.md) explains scope. Clear requests proceed
+without mandatory interviews, tracker setup, or repeated test-boundary approval.
+
+Correctness, requirements, stability, and maintainability are mandatory.
+Select heavier security/performance/fuzz/soak work from actual risk; server
+authorization, privacy, TLS trust, and bounds remain correctness. Evaluate
+refactoring after substantial work: fix related small problems while green,
+record larger debt, and review it at milestone boundaries. No timed rewrites.
+
+Use `python tools/verify.py full` for final behavior/build-gate acceptance,
+`quick` for iteration, and `workflow` for skill/tooling-only changes, plus a
+documentation build for guides. Add feature-specific observable proof. Report
+skips/failures/partial checks honestly; never infer manual/physical acceptance.
+Preserve task-start uncommitted/untracked work. Commit, push, merge, deployment,
+submission, and external messaging need explicit human authorization.
+
+Parallel work is optional under applicable skills: Luna workers, normally one
+or two, at most three children plus the primary and within live tool limits.
+Give disjoint ownership and one writer for coupled code/shared builds. Preserve
+the primary model selected by the human. `.codex/agents/` contains scoped
+contracts; defaults do not replace live runtime permissions.
 
 ## Current commands
 
@@ -38,5 +68,20 @@ cmake --build --preset debug
 ctest --preset debug
 ```
 
-The current code implements only the Stage 0-1 protocol foundation. The
-current test suite has 12 GoogleTest cases; socket behavior remains pending.
+The current code implements Stages 0-13: protocol, TCP, bounded sessions,
+server-validated login, direct rooms, groups, and presence/discovery snapshots.
+A GUI-independent chat/event API, portable worker/model, and Windows room GUI
+are available. SQLite/WAL history supports explicit durable identity resume
+and authorized bounded pages; active membership remains connection-scoped.
+Periodic worker Ping/Pong and complete-request server idle expiry clean up stale sessions.
+Stable message IDs/sequences and explicit sender-scoped saved-key retries are implemented.
+Schema v2 upgrades v1 atomically; ephemeral retries use a 256-key connection window.
+The worker retains durable identity and message keys during bounded reconnect,
+self-rejoins only chosen groups, and replays contiguous private room sequences.
+TLS 1.3 verifies the server CA and DNS/IP SAN before application I/O. Executables
+require `--tls` or explicit `--plaintext-dev`; plaintext permits loopback only.
+The persistent CLI uses ChatWorker for core flows, heartbeats, and recovery;
+stdin polling/input lines and pending receipts are bounded. Unknown command enums
+are rejected. The Windows suite has 37 unit, 157 socket integration, and 8
+hidden native-control GoogleTest cases. Manual GUI/editor walkthroughs,
+physical-network verification, native CLI editing/Ctrl+C, and AI remain pending.

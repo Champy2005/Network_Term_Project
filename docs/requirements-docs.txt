@@ -1,0 +1,5 @@
+# Documentation-only environment; application builds do not depend on Python.
+Sphinx==8.2.3
+breathe==4.36.0
+myst-parser==4.0.1
+sphinxcontrib-mermaid==1.2.3

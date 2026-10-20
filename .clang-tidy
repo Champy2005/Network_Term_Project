@@ -1,2 +1,8 @@
-Checks: '-*,bugprone-*,clang-analyzer-*,performance-*'
+# Keep correctness/performance analysis; omit noisy API/test-shape suggestions.
+# String pairs are named public API parameters, test switches enumerate fixed
+# scenarios, and the public error enum does not need size-driven ABI changes.
+Checks: '-*,bugprone-*,clang-analyzer-*,performance-*,-bugprone-easily-swappable-parameters,-bugprone-switch-missing-default-case,-performance-enum-size'
 WarningsAsErrors: ''
+CheckOptions:
+  # Shutdown deliberately ignores error-code returns after closing/cancelling.
+  bugprone-unused-return-value.AllowCastToVoid: true

@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Windows: run chat GUI (Debug)", "type": "process",
+      "command": "${workspaceFolder}/build/debug/chat_gui.exe",
+      "dependsOn": "C++: prepare clangd (Debug)",
+      "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []
+    },
+    {
+      "label": "C++: prepare clangd (Debug)",
+      "type": "process",
+      "command": "cmake", "args": ["--build", "--preset", "debug"],
+      "windows": {"command": "powershell", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/tools/dev.ps1", "-Action", "prepare"]},
+      "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []
+    },
+    {
+      "label": "C++: test Debug", "type": "process",
+      "command": "ctest", "args": ["--preset", "debug"],
+      "windows": {"command": "powershell", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/tools/dev.ps1", "-Action", "test"]},
+      "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []
+    },
+    {
+      "label": "C++: check clangd", "type": "process",
+      "command": "python", "args": ["tools/check_clangd.py"],
+      "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []
+    },
+    {
+      "label": "Docs: setup", "type": "process", "command": "python",
+      "args": ["tools/docs.py", "setup"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []
+    },
+    {
+      "label": "Docs: build", "type": "process", "command": "python",
+      "args": ["tools/docs.py", "build"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []
+    },
+    {
+      "label": "Docs: serve", "type": "process", "command": "python",
+      "args": ["tools/docs.py", "serve"], "options": {"cwd": "${workspaceFolder}"}, "problemMatcher": []
+    }
+  ]
+}

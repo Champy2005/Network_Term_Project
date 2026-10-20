@@ -1,3 +1,5 @@
+// Source of the wire contract; protoc generates C++ under build/<preset>/generated.
+// Preserve field numbers. Transport framing and authorization live in C++.
 syntax = "proto3";
 
 package chat.protocol;
@@ -10,7 +12,7 @@ message Envelope {
   uint32 protocol_version = 1;
 
   // A client-chosen operation ID. Responses echo it; unsolicited updates may
-  // leave it empty. Future retry/deduplication policy can use the same ID.
+  // leave it empty. Message retry keys are separate from this exchange correlation.
   string request_id = 2;
 
   oneof payload {
@@ -26,22 +28,31 @@ message Envelope {
     Pong pong = 19;
     Ack ack = 20;
     Error error = 21;
-    // Tags 30 and above are available for later history/sync operations.
+    HistoryRequest history_request = 30;
+    HistoryResponse history_response = 31;
+    SyncRequest sync_request = 32;
+    SyncResponse sync_response = 33;
+    DirectRoomsRequest direct_rooms_request = 34;
+    DirectRoomsResponse direct_rooms_response = 35;
   }
 }
 
+// Claim one active, case-sensitive username for the requesting connection.
 message LoginRequest {
   string username = 1;
+  string resume_token = 2; // Optional secret proving a previously issued durable identity.
 }
 
+// Rejection permits retry; acceptance binds identity until disconnect.
 message LoginResponse {
   bool accepted = 1;
   string username = 2;
   string reason = 3; // Human-readable detail when accepted is false.
+  string resume_token = 4; // Durable servers issue/confirm a secret; never log it.
 }
 
-// Client -> server: recipient and text are required; all other fields must be
-// empty/zero. Server -> client: sender and room metadata come from server state.
+// Client -> server: recipient/text and optional client_message_id; server metadata
+// stays empty/zero. Server -> client: authoritative metadata; retry key is omitted.
 message DirectMessage {
   string recipient = 1;
   string text = 2;
@@ -50,18 +61,21 @@ message DirectMessage {
   string message_id = 5;
   uint64 room_sequence = 6;
   uint64 server_timestamp_unix_ms = 7;
+  string client_message_id = 8; // Optional retry key (1-64 ASCII letters/digits/_/-); never a server ID.
 }
 
+// Create a distinct group ID; initially only the requester is a member.
 message CreateGroupRequest {
   string name = 1;
 }
 
+// Join the requesting connection alone; no operation adds another user.
 message JoinGroupRequest {
   string group_id = 1;
 }
 
-// Client -> server: group_id and text are required; all other fields must be
-// empty/zero. A server must verify that the sender belongs to the group.
+// Client -> server: group_id/text and optional client_message_id; server metadata
+// stays empty/zero. Current membership is required, including accepted retries.
 message GroupMessage {
   string group_id = 1;
   string text = 2;
@@ -69,6 +83,7 @@ message GroupMessage {
   string message_id = 4;
   uint64 room_sequence = 5;
   uint64 server_timestamp_unix_ms = 6;
+  string client_message_id = 7; // Same sender-scoped retry key namespace as direct messages.
 }
 
 // Complete snapshot of currently connected users, including the recipient.
@@ -76,6 +91,7 @@ message UserListUpdate {
   repeated string usernames = 1;
 }
 
+// Discovery is public to logged-in users; delivery still requires membership.
 message GroupInfo {
   string group_id = 1;
   string name = 2;
@@ -87,23 +103,26 @@ message GroupListUpdate {
   repeated GroupInfo groups = 1;
 }
 
+// Diagnostic/periodic client heartbeat nonce; complete requests refresh server idle activity.
 message Ping {
   uint64 nonce = 1;
 }
 
+// Correlated response echoing the exact Ping nonce.
 message Pong {
   uint64 nonce = 1;
 }
 
-// Successful operation status. For group creation, resource_id is the new
-// group_id; for messages, message_id and room_sequence identify the accepted
-// message. Unused fields remain empty/zero.
+// ACKs identify the direct room or group in resource_id. Storage-enabled servers
+// commit before acknowledging; recipient receipt is not implied. Message ACKs carry
+// stable server IDs/sequences, including when an accepted retry is acknowledged again.
 message Ack {
   string resource_id = 1;
   string message_id = 2;
   uint64 room_sequence = 3;
 }
 
+// Stable machine-readable failures; do not renumber existing values.
 enum ErrorCode {
   ERROR_CODE_UNSPECIFIED = 0;
   ERROR_CODE_INVALID_REQUEST = 1;
@@ -114,9 +133,75 @@ enum ErrorCode {
   ERROR_CODE_ALREADY_MEMBER = 6;
   ERROR_CODE_NOT_GROUP_MEMBER = 7;
   ERROR_CODE_INTERNAL_ERROR = 8;
+  ERROR_CODE_HISTORY_FORBIDDEN = 9;
+  ERROR_CODE_MESSAGE_ID_CONFLICT = 10;
+  ERROR_CODE_SYNC_GAP = 11;
 }
 
+// Failed operation response; Envelope.request_id identifies the request.
 message Error {
   ErrorCode code = 1;
   string message = 2;
+}
+
+// Explicit, bounded history read. Cursor is a storage ID, not a room sequence.
+message HistoryRequest {
+  string room_id = 1;
+  uint64 after_id = 2;
+  uint32 limit = 3; // Zero selects 50; maximum 100 records per response.
+}
+
+// Server-owned immutable stored text; IDs are increasing database cursors.
+message HistoryEntry {
+  uint64 id = 1;
+  string sender = 2;
+  string recipient = 3; // Empty for group messages.
+  string text = 4;
+  string message_id = 5;
+  uint64 room_sequence = 6;
+  uint64 server_timestamp_unix_ms = 7; // Zero for messages migrated from schema v1.
+}
+
+// Records are ascending and belong only to the requested, authorized room.
+message HistoryResponse {
+  string room_id = 1;
+  repeated HistoryEntry entries = 2;
+  uint64 next_after_id = 3;
+  bool has_more = 4;
+  bool group = 5;
+}
+
+// Authorized room replay after a contiguous sequence; zero through_sequence captures a watermark.
+message SyncRequest {
+  string room_id = 1;
+  uint64 after_sequence = 2;
+  uint32 limit = 3; // Zero selects 50; maximum 100.
+  uint64 through_sequence = 4;
+}
+// Ascending contiguous records bounded by one captured watermark, not by future live traffic.
+message SyncResponse {
+  string room_id = 1;
+  repeated HistoryEntry entries = 2;
+  uint64 next_sequence = 3;
+  uint64 through_sequence = 4;
+  bool has_more = 5;
+  bool group = 6;
+}
+// Discover only the authenticated principal's durable direct rooms, including offline peers.
+message DirectRoomsRequest {
+  uint64 after_room_id = 1;
+  uint32 limit = 2; // Zero selects 64; maximum 64.
+}
+message DirectRoomInfo {
+  string room_id = 1;
+  string peer = 2;
+  uint64 last_sequence = 3;
+  // True only while the original durable peer, rather than a namesake, is connected.
+  bool peer_connected = 4;
+}
+// Database room cursor; no unrelated room is disclosed.
+message DirectRoomsResponse {
+  repeated DirectRoomInfo rooms = 1;
+  uint64 next_room_id = 2;
+  bool has_more = 3;
 }

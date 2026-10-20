@@ -68,8 +68,8 @@ ctest --preset debug
 ```
 
 The first configure can take a while because vcpkg builds dependencies. A
-successful test run reports **100% tests passed**. `ctest` currently sees one
-`chat_tests` executable containing the framing and Protobuf unit cases. Build
+successful test run reports **100% tests passed**. `ctest` sees `chat_tests`
+for unit cases and `chat_integration_tests` for real TCP Ping/Pong cases. Build
 output stays in `build/debug`.
 
 For a release build, run the same three commands with `release`. The optional
@@ -86,8 +86,13 @@ Studio developer shell so the sanitizer runtime is available on `PATH`.
 | Configuration still uses an old compiler or vcpkg path | In the correct developer shell, run `cmake --preset debug --fresh`, then build again. |
 | `ctest --preset asan` cannot load the sanitizer runtime | Run it from the Visual Studio developer shell used for the build. |
 
-This checkpoint has protocol and framing tests. It does not yet have a runnable
-chat server or client. See the [project overview](../../README.md) and
+This checkpoint has protocol/framing, session, login, and chat tests plus a
+runnable server and Ping/login CLI (Windows 10 or newer). Chat operations and
+events are available through the headless API. `chat_gui.exe` provides native
+Windows room controls; see the [GUI guide](gui.md). Manual GUI checks remain pending.
+The server defaults to `data/chat.sqlite3`; the [history guide](../history.md)
+explains database paths and the headless history/resume APIs.
+See the [project overview](../../README.md) and
 [architecture](../architecture.md) for what is implemented and planned.
 
 ## Tool references

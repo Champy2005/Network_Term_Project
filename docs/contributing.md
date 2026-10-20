@@ -33,10 +33,18 @@ Record the actual owner for each task in the [progress task board](progress.md).
 5. Review the diff for correctness, naming, error paths, and accidental
    secrets. Update architecture, testing, progress, and requirement evidence
    when behavior changes.
-6. Commit a working checkpoint with a focused message. Record any remaining
-   limitation in the relevant docs instead of presenting it as complete.
+6. Record limitations honestly. Commit a working checkpoint with a focused
+   message when the human requests it; coding agents do not automatically commit.
+
+The [engineering workflow](workflow.md) provides local Codex skills and a
+verification runner for these steps. Evaluate maintainability after substantial
+changes, fix related small problems, and review broader debt at milestones.
 
 Use the repository's `.clang-format` style and keep compiler warnings enabled.
+Both editors share `.clangd` and the Debug compilation database. Follow the
+[tooling guide](setup/tooling.md) for short API/test comments and documentation
+builds. Run `python tools/check_clangd.py` after C++ changes and
+`python tools/docs.py build` after comment/guide changes.
 Prefer small functions, explicit error handling, and clear ownership of async
 operations. A session must not outlive work that still references it, and each
 socket must have one ordered write path. The server must derive identity from

@@ -1,0 +1,3 @@
+# Shared by Zed, VS Code, and clangd --check. Build Debug before opening C++.
+CompileFlags:
+  CompilationDatabase: build/debug

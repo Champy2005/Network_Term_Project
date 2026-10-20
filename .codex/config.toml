@@ -1,0 +1,7 @@
+# Keep the primary model/effort selected in the Codex composer.
+# Three children plus the primary fit this project's four-agent working group.
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+default_subagent_model = "gpt-6-luna"
+default_subagent_reasoning_effort = "high"
