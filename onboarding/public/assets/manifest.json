@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "provenance": "Original procedural assets authored for Inside Socket Chat; CC0-1.0; no external meshes or textures.",
+  "models": {
+    "client": {
+      "src": "/assets/models/client.glb",
+      "bytes": 977624,
+      "sha256": "1cbcd794d5e1e167fcaf8b40f0997f164d8721b21934cd64994c7208c84b3b19",
+      "dimensions": {
+        "width": 5.9,
+        "depth": 3.9,
+        "height": 1.8
+      },
+      "origin": "bottom-centered",
+      "nodes": [
+        "shell",
+        "lid",
+        "core",
+        "port-in",
+        "port-out",
+        "anchor-center",
+        "anchor-core",
+        "anchor-ingress",
+        "anchor-egress"
+      ],
+      "pivots": {
+        "shell": "local",
+        "lid": "local",
+        "core": "local"
+      },
+      "drawCalls": 19
+    },
+    "server": {
+      "src": "/assets/models/server.glb",
+      "bytes": 1241740,
+      "sha256": "5b556f8b052288e21af17ae7d0685ffe4ccea27adbcf7bcc717d9258b89f45e8",
+      "dimensions": {
+        "width": 5.9,
+        "depth": 3.9,
+        "height": 2.5
+      },
+      "origin": "bottom-centered",
+      "nodes": [
+        "shell",
+        "lid",
+        "core",
+        "port-in",
+        "port-out",
+        "anchor-center",
+        "anchor-core",
+        "anchor-ingress",
+        "anchor-egress"
+      ],
+      "pivots": {
+        "shell": "local",
+        "lid": "local",
+        "core": "local"
+      },
+      "drawCalls": 19
+    },
+    "storage": {
+      "src": "/assets/models/storage.glb",
+      "bytes": 1117272,
+      "sha256": "6ed60a7126ae67357c4d83a85d3c30171682b8591873b8ae823b7d12325ef1d9",
+      "dimensions": {
+        "width": 5.9,
+        "depth": 3.9,
+        "height": 2.75
+      },
+      "origin": "bottom-centered",
+      "nodes": [
+        "shell",
+        "lid",
+        "core",
+        "port-in",
+        "port-out",
+        "tray-0",
+        "tray-1",
+        "tray-2",
+        "tray-3",
+        "anchor-center",
+        "anchor-core",
+        "anchor-ingress",
+        "anchor-egress"
+      ],
+      "pivots": {
+        "shell": "local",
+        "lid": "local",
+        "core": "local",
+        "tray-0": "local",
+        "tray-1": "local",
+        "tray-2": "local",
+        "tray-3": "local"
+      },
+      "drawCalls": 23
+    }
+  }
+}

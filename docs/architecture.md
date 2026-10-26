@@ -23,6 +23,10 @@ implementation and demonstration evidence.
 
 ## Intended runtime architecture
 
+The separate [interactive onboarding](onboarding.md) application explains these
+boundaries using deterministic browser simulations and hashed source snapshots.
+It does not participate in the live chat path or change the C++ contracts.
+
 ```mermaid
 flowchart LR
     UI[Windows room controls] --> M[Portable RoomModel]

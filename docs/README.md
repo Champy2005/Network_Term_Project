@@ -15,6 +15,7 @@ team's chosen design and future work.
 | [Recovery](recovery.md) | Identity resume, private sequence paging, bounded retries, GUI retention, and recovery limits. |
 | [TLS](tls.md) | Certificate generation, explicit modes, verified DNS/IP identity, and transport ownership. |
 | [CLI](cli.md) | Persistent commands/events, input limits, receipt draining, and API ownership. |
+| [Interactive onboarding](onboarding.md) | Cinematic browser journey, deterministic experiments, source atlas, authoring, tests, and production acceptance. |
 | [Plan](plan.md) | Ordered milestones and exit criteria through GUI and presentation. |
 | [Progress](progress.md) | Verified status, test evidence, next tasks, and task ownership. |
 | [Testing](testing.md) | Automated coverage and the two-physical-computer demo script. |

@@ -1,0 +1,498 @@
+{
+  "version": 1,
+  "revision": "e0b54c7",
+  "sources": [
+    {
+      "id": "wire-envelope",
+      "path": "proto/chat.proto",
+      "symbol": "Envelope & Oneof Payload Dispatch",
+      "startLine": 6,
+      "endLine": 19,
+      "hash": "eaa4d8c8b30b21ed0c97808990ec20477b738b3790bce5fff80cf0d188f32052",
+      "code": "\n// The v1 application protocol. A serialized Envelope is the payload of one\n// length-prefixed frame. Proto3 does not enforce required fields: receivers\n// must validate the version, payload, and payload-specific fields.\nmessage Envelope {\n  // Senders set this to 1. A receiver rejects unsupported versions.\n  uint32 protocol_version = 1;\n\n  // A client-chosen operation ID. Responses echo it; unsolicited updates may\n  // leave it empty. Message retry keys are separate from this exchange correlation.\n  string request_id = 2;\n\n  oneof payload {\n    LoginRequest login_request = 10;",
+      "summary": "Root wire container wrapping protocol_version, request_id correlation, and the 18-branch oneof payload.",
+      "explanation": "Every TCP frame decodes into a single `chat.protocol.Envelope`. Tag 1 (`protocol_version`) must be `1`. Tag 2 (`request_id`) correlates client requests with their direct `Ack`/`Error`/`Response` replies, while unsolicited server pushes (`DirectMessage`, `GroupMessage`, `UserListUpdate`, `GroupListUpdate`) leave `request_id` empty. Tags 10–21 cover core chat/presence/heartbeat/ack/error; tags 30–35 cover Stage 8–11 durability (history, sequence sync, and private room discovery).",
+      "risk": "If `protocol_version != 1` or `payload_case() == PAYLOAD_NOT_SET` is not checked before dispatch, a blank or future-version packet could be misinterpreted as a default action."
+    },
+    {
+      "id": "frame-encode",
+      "path": "src/protocol/framing.cpp",
+      "symbol": "encode_frame() — Big-Endian Header Serialization",
+      "startLine": 7,
+      "endLine": 20,
+      "hash": "612532d87895d92694e3b81c178bbd2832af5264903805951213fac73a4b9b4a",
+      "code": "#include <utility>\n\nnamespace chat::protocol {\n\nstd::vector<std::uint8_t> encode_frame(const std::span<const std::uint8_t> payload) {\n    if (payload.empty()) {\n        throw FrameError(\"frame payload must not be empty\");\n    }\n    if (payload.size() > kMaxFrameSize) {\n        throw FrameError(\"frame payload exceeds maximum size\");\n    }\n\n    const auto size = static_cast<std::uint32_t>(payload.size());\n    std::vector<std::uint8_t> frame;",
+      "summary": "Validates payload size (1..1 MiB) and prepends the 4-byte network-order length.",
+      "explanation": "Checks `payload.empty()` and `payload.size() > kMaxFrameSize`. Reserves `4 + payload.size()` bytes up front (single heap allocation), then shifts the 32-bit unsigned size by 24, 16, 8, and 0 bits masked with `0xffU` to produce big-endian (MSB-first) bytes regardless of whether the host CPU is little-endian (x86_64/ARM).",
+      "risk": "Writing raw `memcpy(&size, ...)` would send little-endian bytes on x86, breaking network byte order."
+    },
+    {
+      "id": "frame-decoder",
+      "path": "src/protocol/framing.cpp",
+      "symbol": "FrameDecoder::feed() — Incremental Stream State Machine",
+      "startLine": 33,
+      "endLine": 46,
+      "hash": "6cdf76de803ae3af4c4445257127a289d5024705788a5aa00efe1ebd7c6daf35",
+      "code": "    }\n}\n\nstd::vector<std::vector<std::uint8_t>>\nFrameDecoder::feed(const std::span<const std::uint8_t> bytes) {\n    if (failed_) {\n        throw FrameError(\"decoder is in a failed state\");\n    }\n\n    std::vector<std::vector<std::uint8_t>> frames;\n    std::size_t offset = 0;\n    while (offset < bytes.size()) {\n        if (header_size_ < header_.size()) {\n            const auto count = std::min(header_.size() - header_size_, bytes.size() - offset);",
+      "summary": "Consumes an arbitrary chunk of TCP bytes, assembling 4-byte headers and N-byte payloads across splits or coalesced packets.",
+      "explanation": "In a `while (offset < bytes.size())` loop: Phase 1 fills `header_` up to 4 bytes using `std::min(4 - header_size_, bytes.size() - offset)`. If fewer than 4 header bytes have arrived so far, it breaks and waits for the next TCP read. Once all 4 header bytes arrive, it reconstructs `payload_size_` via bit shifts, validates `1 <= payload_size_ <= max_frame_size_`, and calls `payload_.reserve(payload_size_)`. Phase 2 copies up to `remaining = payload_size_ - payload_.size()` bytes into `payload_`. When `payload_.size() == payload_size_`, the completed frame is `std::move`d into `frames` and state resets (`header_size_ = 0`, `payload_size_ = 0`) to immediately parse any coalesced next frame in the same buffer.",
+      "risk": "If `header_size_` and `payload_` weren't preserved as member variables across `feed()` calls, any frame split across two `async_read_some` calls would corrupt the stream."
+    },
+    {
+      "id": "frame-finish",
+      "path": "src/protocol/framing.cpp",
+      "symbol": "FrameDecoder::finish() — Clean vs Truncated EOF Check",
+      "startLine": 77,
+      "endLine": 90,
+      "hash": "95b462a9c2355f10bb4899c1c5698dda66f1dcee63a4065581a7843771c52aab",
+      "code": "    }\n    return frames;\n}\n\nvoid FrameDecoder::finish() const {\n    if (failed_) {\n        throw FrameError(\"decoder is in a failed state\");\n    }\n    if (header_size_ != 0U) {\n        throw FrameError(\"connection closed with a truncated frame\");\n    }\n}\n\n} // namespace chat::protocol",
+      "summary": "Called when TCP read returns `eof` to detect mid-frame disconnection.",
+      "explanation": "Note that when `header_size_ == 4`, `payload_size_` is non-zero until the payload finishes (at which point `header_size_` resets to `0`). Therefore `header_size_ != 0U` catches BOTH a partial 1–3 byte header AND a complete 4-byte header whose payload has not finished arriving!",
+      "risk": "Without `finish()`, a half-closed socket that sent half a frame would be treated as a clean EOF instead of a protocol truncation error."
+    },
+    {
+      "id": "tls-verify",
+      "path": "src/transport/tls.cpp",
+      "symbol": "void verify_tls_peer(",
+      "startLine": 70,
+      "endLine": 83,
+      "hash": "5cf564f12207efb85d92157e7eba5adf6739f3c6c6fa9e3f9c7931cb97a61a6e",
+      "code": "    } catch (const boost::system::system_error&) {\n        throw TlsError(\"TLS CA configuration failed\");\n    }\n}\nvoid verify_tls_peer(SocketStream& stream, const std::string& name) {\n    if (name.empty() || name.size() > 253 || name.find('\\0') != std::string::npos) {\n        throw TlsError(\"TLS expected DNS/IP name is invalid\");\n    }\n    auto* ssl = stream.tls().native_handle();\n    SSL_set_hostflags(ssl,\n                      X509_CHECK_FLAG_NEVER_CHECK_SUBJECT | X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);\n    boost::system::error_code error;\n    static_cast<void>(boost::asio::ip::make_address(name, error));\n    if (!error) {",
+      "summary": "",
+      "explanation": "",
+      "risk": ""
+    },
+    {
+      "id": "session-ownership",
+      "path": "src/server/client_session.cpp",
+      "symbol": "send(), stop() & stop_on_executor() (Bounded Admission & Abortive Close)",
+      "startLine": 67,
+      "endLine": 80,
+      "hash": "ae14c789dc9a0acac73bd66be60b4e03dd21d38ff9e2e13561ddac5ba62765fa",
+      "code": "        }\n    });\n}\n\nbool ClientSession::send(const protocol::Envelope& message) {\n    Frame frame;\n    try {\n        const auto payload = message.SerializeAsString();\n        frame = std::make_shared<const std::vector<std::uint8_t>>(\n            protocol::encode_frame(std::span<const std::uint8_t>(\n                reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size())));\n    } catch (const protocol::FrameError&) {\n        stop();\n        return false;",
+      "summary": "Serializes Envelope into a framed shared_ptr buffer, checks 256-frame / 2-MiB bounds under queue_mutex_, schedules pump_write() once, and handles idempotent teardown.",
+      "explanation": "In `send()`: 1) Serializes and encodes the frame outside the lock. 2) Locks `queue_mutex_`, checks `accepting_sends_`, and checks `queue_.size() >= limits_.queued_frames || frame->size() > limits_.queued_bytes - queued_bytes_` (using subtraction so `queued_bytes_ + frame->size()` cannot integer-overflow!). 3) If `pump_scheduled_` is false, sets it to true and posts `pump_write()` to `executor_`. In `stop_on_executor()`: cancels `idle_timer_`, clears `queue_`, closes `stream_.socket()` abortively, and invokes `on_close_(*this)` exactly once.",
+      "risk": "Calling `async_shutdown` on TLS during `stop_on_executor()` would launch a second concurrent writer on `ssl::stream` while `async_write` is in flight (undefined behavior in Boost.Asio SSL) and let a dead peer hang teardown."
+    },
+    {
+      "id": "session-idle",
+      "path": "src/server/client_session.cpp",
+      "symbol": "wait_for_idle() — Timestamp-Based Lazy Idle Timer",
+      "startLine": 136,
+      "endLine": 149,
+      "hash": "12749d291cb7a9d19cc1ad4004c513f866da8cdc471b7e08bcd6c05896db9b78",
+      "code": "        on_close_(*this); // Exactly once, on the hub executor.\n    }\n}\n\nvoid ClientSession::wait_for_idle() {\n    if (limits_.idle_timeout.count() == 0) {\n        return;\n    }\n    // One wait per session: traffic updates a timestamp instead of posting a\n    // cancellation/rearm pair for every frame, including coalesced reads.\n    idle_timer_.expires_at(last_activity_ + limits_.idle_timeout);\n    idle_timer_.async_wait(boost::asio::bind_executor(\n        executor_, [self = shared_from_this()](const boost::system::error_code& error) {\n            if (error || self->stopped_) {",
+      "summary": "Expires silent connections after 30s without cancelling/re-arming the kernel timer on every incoming message.",
+      "explanation": "Instead of calling `idle_timer_.expires_after(30s)` inside `read()` on every message (which would force Asio to cancel and re-post a timer operation for every single chat message!), `read()` merely updates `last_activity_ = steady_clock::now()`. When `idle_timer_` wakes up, it checks if `now() >= last_activity_ + idle_timeout`: if yes, it closes the session; if traffic arrived in the meantime, it sleeps for the remaining time (`expires_at(last_activity_ + idle_timeout)`).",
+      "risk": "Rearming `steady_timer` on every frame in a high-throughput chat room would flood the strand with `operation_aborted` timer completions."
+    },
+    {
+      "id": "session-read",
+      "path": "src/server/client_session.cpp",
+      "symbol": "read() — Incremental Frame Decoding, Half-Close Drain & Envelope Validation",
+      "startLine": 157,
+      "endLine": 170,
+      "hash": "1e6ccd2cbe02e2c395982941b28aae9078c82c7fdb6a2a6f4669c12c4b965c0d",
+      "code": "            }\n        }));\n}\n\nvoid ClientSession::read() {\n    stream_.async_read_some(\n        boost::asio::buffer(input_),\n        boost::asio::bind_executor(\n            executor_,\n            [self = shared_from_this()](const boost::system::error_code& error, std::size_t count) {\n                if (self->stopped_) {\n                    return;\n                }\n                if (error) {",
+      "summary": "Reads up to 4096 bytes into `input_`, feeds `decoder_`, validates `Envelope` v1, updates `last_activity_`, and dispatches `on_message_`.",
+      "explanation": "Look at the EOF handling (lines 171–188): if the peer performs a TCP half-close (`shutdown(SD_SEND)` -> `error == eof`) right after sending a valid request, `decoder_.finish()` succeeds, `read_closed_` becomes `true`, and if `queue_` is non-empty, `read()` returns WITHOUT calling `stop_on_executor()` so `pump_write()` can finish draining the queued reply before closing the socket (line 231)!",
+      "risk": "If `eof` immediately closed the socket while `queue_` still held the `Pong` or `Ack` for the final request, clients doing send-then-half-close would lose their response."
+    },
+    {
+      "id": "hub-login",
+      "path": "src/server/chat_hub.cpp",
+      "symbol": "login() — Unique Username Reservation & Durable Identity Verification (R3, R4)",
+      "startLine": 183,
+      "endLine": 196,
+      "hash": "c007221c71a7c95878137227cc48e98666a95dc1f6e8aa2bfe12505901933525",
+      "code": "        sender.recent.push_back({key, target, text, group, receipt});\n    }\n}\n\nvoid ChatHub::login(ClientSession& session, const protocol::Envelope& request) {\n    auto& connection = connections_.at(&session);\n    const auto& name = request.login_request().username();\n    auto reply = envelope(request.request_id());\n    auto* result = reply.mutable_login_response();\n    if (!connection.username.empty()) {\n        result->set_reason(\"connection is already logged in\");\n    } else if (!valid_username(name)) {\n        result->set_reason(\"username must contain 1-32 ASCII letters, digits, or underscores\");\n    } else if (usernames_.contains(name)) {",
+      "summary": "Rejects re-login, invalid names, or taken usernames; verifies/issues durable `resume_token` via HistoryStore; broadcasts user & group snapshots.",
+      "explanation": "Checks: 1) `!connection.username.empty()` (cannot rename an already logged-in connection), 2) `!valid_username(name)`, 3) `usernames_.contains(name)` (R3 uniqueness). If `storage_` is active, calls `storage_->identity(name, resume_token)` to either create a new principal + 256-bit token or verify an existing token's SHA-256 hash. Sends `LoginResponse` FIRST (line 223), then calls `broadcast(true, true)` (line 225) so the client always receives its `LoginResponse` before `UserListUpdate` and `GroupListUpdate`!",
+      "risk": "Reserving `usernames_.emplace(...)` before `storage_->identity(...)` succeeds would leak a locked username if the database threw an error or rejected an invalid resume token."
+    },
+    {
+      "id": "hub-direct",
+      "path": "src/server/chat_hub.cpp",
+      "symbol": "direct() — Pair-Scoped Direct Rooms & Private Routing (R5, R7)",
+      "startLine": 225,
+      "endLine": 238,
+      "hash": "d6953382d87b58aec4e0be451fd9b2a721b715fb758a81579745ff3772e6af28",
+      "code": "        broadcast(true, true);\n    }\n}\n\nvoid ChatHub::direct(ClientSession& session, const protocol::Envelope& request) {\n    const auto& message = request.direct_message();\n    if (!valid_username(message.recipient()) || !valid_text(message.text()) ||\n        !message.sender().empty() || !message.room_id().empty() || !message.message_id().empty() ||\n        message.room_sequence() != 0 || message.server_timestamp_unix_ms() != 0 ||\n        (!message.client_message_id().empty() &&\n         !protocol::valid_message_key(message.client_message_id()))) {\n        error(session, request, protocol::ERROR_CODE_INVALID_REQUEST,\n              \"invalid direct message fields\");\n        return;",
+      "summary": "Validates DM fields, rejects forged metadata, checks retry cache, commits to SQLite, sends ACK, and delivers ONLY to sender and recipient.",
+      "explanation": "Lines 231–235 enforce strict anti-spoofing: `!message.sender().empty() || !message.room_id().empty() || !message.message_id().empty() || message.room_sequence() != 0 || message.server_timestamp_unix_ms() != 0` all trigger `INVALID_REQUEST`. Next, `retry()` checks if `client_message_id` was already accepted for this sender—if so, it re-sends the original `Ack` even if the recipient has since gone offline! Otherwise it looks up `recipient` in `usernames_`, commits via `storage_->direct(...)` (or assigns ephemeral `direct-N` for `Pair{min(id1,id2), max(id1,id2)}`), sends `Ack` to `session`, sends `delivery` echo to `session`, and sends `delivery` to `recipient_session` (if not a self-DM).",
+      "risk": "Notice `auto recipient_session = recipient.session;` is copied to a local `shared_ptr` before `session.send()` in case `session` disconnects."
+    },
+    {
+      "id": "hub-groups",
+      "path": "src/server/chat_hub.cpp",
+      "symbol": "create_group(), join_group() & group_message() — Voluntary Groups (R8, R10, R11)",
+      "startLine": 317,
+      "endLine": 330,
+      "hash": "0ae6cc721fb0655ef51a0fdd02c8cc1d73f393afdfb05f71c6942bbc6826e229",
+      "code": "        broadcast(false, true);\n    }\n}\n\nvoid ChatHub::group_message(ClientSession& session, const protocol::Envelope& request) {\n    const auto& message = request.group_message();\n    if (!valid_text(message.text()) || !message.sender().empty() || !message.message_id().empty() ||\n        message.room_sequence() != 0 || message.server_timestamp_unix_ms() != 0 ||\n        (!message.client_message_id().empty() &&\n         !protocol::valid_message_key(message.client_message_id()))) {\n        error(session, request, protocol::ERROR_CODE_INVALID_REQUEST,\n              \"invalid group message fields\");\n        return;\n    }",
+      "summary": "Creates groups with creator-only membership (R8), processes explicit self-join by group_id (R10), and routes group messages exclusively to current members (R11).",
+      "explanation": "In `create_group()`: validates `valid_group_name(name)` and `groups_.size() < 128`, creates `group-N` in SQLite or memory, inserts `{&session}` as the sole initial member, sends `Ack`, and broadcasts `GroupListUpdate`. In `join_group()`: checks `groups_.find(id)` and `!members.contains(&session)`, records audit admission in SQLite, inserts `&session`, sends `Ack`, and broadcasts `GroupListUpdate`. In `group_message()`: verifies `found->second.members.contains(&session)` (`NOT_GROUP_MEMBER` if not), checks retry deduplication, commits message, sends `Ack`, and iterates ONLY over `found->second.members` to send the `GroupMessage` delivery!",
+      "risk": "Checking membership after `retry()` in `group_message()` would allow a former member who disconnected and reconnected without rejoining to replay group retries."
+    },
+    {
+      "id": "storage-transaction",
+      "path": "src/server/history_store.cpp",
+      "symbol": "RAII Statement, Transaction (`BEGIN IMMEDIATE`), SHA-256 Hashing & Room ID Parser",
+      "startLine": 61,
+      "endLine": 74,
+      "hash": "fb4f9f713bf77619e8ca3527ba7049e1587e43b09190c6d3bba46f6f9bfcf2ff",
+      "code": "};\n/// Failed commits roll back; no uncommitted room/message can escape as an ACK.\nclass Transaction {\n  public:\n    explicit Transaction(sqlite3* db) : db_(db) { execute(db_, \"BEGIN IMMEDIATE\"); }\n    ~Transaction() {\n        if (!committed_) {\n            static_cast<void>(sqlite3_exec(db_, \"ROLLBACK\", nullptr, nullptr, nullptr));\n        }\n    }\n    void commit() {\n        execute(db_, \"COMMIT\");\n        committed_ = true;\n    }",
+      "summary": "Wraps `sqlite3_stmt` and `BEGIN IMMEDIATE`/`ROLLBACK` in exception-safe RAII classes; implements OpenSSL EVP_sha256 token hashing and strict `direct-N`/`group-N` number parsing.",
+      "explanation": "`Statement` calls `sqlite3_prepare_v2` in its constructor and `sqlite3_finalize` in its destructor, binding strings with `SQLITE_TRANSIENT` (forcing SQLite to make its own internal copy immediately). `Transaction` executes `BEGIN IMMEDIATE` (acquiring a write lock immediately on start so mid-transaction `SQLITE_BUSY` deadlocks cannot occur) and automatically runs `ROLLBACK` in `~Transaction()` unless `commit()` succeeded. `token_hash()` hashes the 64-hex resume token with `EVP_sha256()` so a leaked database file never exposes usable bearer tokens!",
+      "risk": "Using `BEGIN DEFERRED` instead of `BEGIN IMMEDIATE` can cause two concurrent readers upgrading to writers to deadlock mid-transaction without waiting for the 100ms `busy_timeout`."
+    },
+    {
+      "id": "storage-identity",
+      "path": "src/server/history_store.cpp",
+      "symbol": "identity(), groups(), create_group(), join_group(), direct(), group_message() & retry()",
+      "startLine": 230,
+      "endLine": 243,
+      "hash": "2e2540049dfc98139963bbcdf5daad413a28a3577792d318f0d6fb51a3a89bd0",
+      "code": "    sqlite3* db = nullptr;\n};\nHistoryStore::HistoryStore(const std::string& path) : impl_(std::make_unique<Impl>(path)) {}\nHistoryStore::~HistoryStore() = default;\nStoredIdentity HistoryStore::identity(const std::string& name, const std::string& token) {\n    if (!token.empty()) {\n        if (!valid_token(token)) {\n            throw std::invalid_argument(\"invalid resume token\");\n        }\n        Statement find(impl_->db, \"SELECT id FROM users WHERE name=? AND token_hash=?\");\n        find.bind(1, name);\n        find.bind(2, token_hash(token));\n        if (!find.row()) {\n            throw std::invalid_argument(\"invalid resume token\");",
+      "summary": "Implements durable principal creation/verification, atomic room/message commits, and sender-scoped retry deduplication.",
+      "explanation": "In `identity(name, token)`: if `token` is empty, generates a fresh 256-bit token and inserts a new row into `users(name, token_hash)`—even if `name` was used in the past! That guarantees a new user claiming `\"Alice\"` gets a brand-new `principal` ID and cannot read the previous `\"Alice\"`'s direct messages! In `direct()` and `group_message()`: both start a `Transaction`, check `retry()` inside the transaction, insert the message + advance `last_sequence` via `append()`, and call `transaction.commit()`. In `retry()`: looks up `(principal, client_key)` and verifies that `kind`, `target`, and `text` match the original message, throwing `MessageIdConflict` if any differ.",
+      "risk": "Checking `retry()` outside the write transaction would allow a race condition if two identical retries arrived back-to-back."
+    },
+    {
+      "id": "storage-history",
+      "path": "src/server/history_store.cpp",
+      "symbol": "direct_participant(), history(), sync() & direct_rooms()",
+      "startLine": 355,
+      "endLine": 368,
+      "hash": "5fe830da7c408de45ba68ecffab47be7f1aef3c9e7a702bc89aef0098d1c9f68",
+      "code": "    query.bind(2, principal);\n    query.bind(3, principal);\n    return query.row();\n}\nprotocol::HistoryResponse HistoryStore::history(const std::string& id, std::uint64_t after,\n                                                std::uint32_t limit) {\n    if (limit == 0 || limit > 100 ||\n        after > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())) {\n        throw std::invalid_argument(\"invalid history page bounds\");\n    }\n    protocol::HistoryResponse result;\n    result.set_room_id(id);\n    result.set_group(id.starts_with(\"group-\"));\n    result.set_next_after_id(after);",
+      "summary": "Implements bounded cursor pagination (`LIMIT limit + 1`), contiguous sequence verification for `sync()`, and principal-scoped direct room discovery.",
+      "explanation": "Notice the pagination trick in `history()` (line 373) and `direct_rooms()` (line 454): it binds `LIMIT limit + 1`! If `limit + 1` rows come back, it stops after adding `limit` entries and sets `has_more = true` without needing a separate `SELECT COUNT(*)` query! In `sync()` (lines 391–440): if `through == 0`, it captures `through = latest` (`rooms.last_sequence`) as the fixed upper watermark. As it reads rows ordered by `sequence`, line 422 checks `if (sequence != result.next_sequence() + 1) throw std::invalid_argument(\"sync gap\")`—if any row was deleted or corrupted in the database, the server immediately reports `ERROR_CODE_SYNC_GAP` instead of silently skipping a message!",
+      "risk": "Without the contiguous `sequence == next_sequence + 1` check in `sync()`, a database gap would cause the client cursor to jump over missing messages without warning."
+    },
+    {
+      "id": "client-api",
+      "path": "include/chat/client/ping_client.hpp",
+      "symbol": "PingClient (`ChatClient`) Blocking Operations API",
+      "startLine": 153,
+      "endLine": 166,
+      "hash": "ca5c8e1484c6ef81abdf1c788d19b8c1c395f61551daa2e5e1f73e9cd6907c18",
+      "code": "/// Each instance has one caller at a time and owns its private networking loop.\n/// Connection and each complete exchange have a deadline (default: 3 seconds).\n/// Transport failures throw NetworkError; malformed protocol responses throw\n/// std::runtime_error. Both close the connection; headless callers reconnect explicitly.\nclass PingClient {\n  public:\n    /// @brief Create a disconnected client without a background thread.\n    explicit PingClient(transport::ClientTlsOptions tls = {});\n    /// @brief Release the owned socket and networking state.\n    ~PingClient();\n    PingClient(const PingClient&) = delete;\n    PingClient& operator=(const PingClient&) = delete;\n\n    /// @brief Replace the previous connection and resolve/connect within the deadline.",
+      "summary": "Declares deadline-bounded `connect`, `ping`, `login`, `resume_login`, `history`, `sync`, `direct_rooms`, `send_direct[_with_key]`, `create_group`, `join_group`, `send_group[_with_key]`, `next_event`, and `close`.",
+      "explanation": "Every network method takes an explicit `std::chrono::milliseconds timeout = std::chrono::seconds(3)`. `next_event()` uses a *soft* deadline: if no event arrives within `timeout`, it cancels the read and returns `std::nullopt` while keeping the TCP/TLS connection and any partial `FrameDecoder` bytes intact!",
+      "risk": "If `next_event()` closed the socket on timeout like `exchange()` does, polling for incoming chat messages every 25ms would disconnect the client after 35ms!"
+    },
+    {
+      "id": "client-buffering",
+      "path": "src/client/ping_client.cpp",
+      "symbol": "event(), receive() & exchange() — Two-Phase Event Loop & Interleaved Buffering",
+      "startLine": 463,
+      "endLine": 476,
+      "hash": "68a4790070d450f3c56039fa2affbb122f17559916b506e8d763eed2d2304b96",
+      "code": "        };\n        read();\n        context_.run();\n    }\n    protocol::Envelope exchange(const protocol::Envelope& outgoing,\n                                std::chrono::milliseconds timeout) {\n        if (!stream_->socket().is_open()) {\n            throw std::runtime_error(\"client is not connected\");\n        }\n        const auto payload = outgoing.SerializeAsString();\n        const auto frame = protocol::encode_frame(std::span<const std::uint8_t>(\n            reinterpret_cast<const std::uint8_t*>(payload.data()), payload.size()));\n        arm(timeout);\n        std::optional<protocol::Envelope> response;",
+      "summary": "The heart of `PingClient`: writes the request frame using `run_one()`, then reads frames until the matching `request_id` arrives while buffering unsolicited events in `events_`.",
+      "explanation": "Look at `exchange()` (lines 467–502): why does it run `while (!written && failure_.empty()) { context_.run_one(); }` for the `async_write`, and then call `receive(response, &outgoing)` which calls `context_.run()`? Because the `timer_` is ALREADY armed on `context_`! If `exchange()` called `context_.run()` right after `async_write`, `context_.run()` would block until `timer_` also finished (3 full seconds!) because `timer_.async_wait` is outstanding work on `context_`! Instead, `run_one()` steps one completion at a time until `written == true` (while `timer_` stays live!), and then `receive()` starts `async_read_some` and calls `complete({})` when the response arrives, which cancels `timer_` so `context_.run()` returns immediately!",
+      "risk": "Calling `context_.run()` after `async_write` without cancelling `timer_` would make every single `send_direct` block for the full 3-second timeout before even starting to read the reply!"
+    },
+    {
+      "id": "worker-recovery",
+      "path": "src/client/chat_worker.cpp",
+      "symbol": "run() Lambdas: `publish`, `track`, `replay`, `dispatch` & `synchronize`",
+      "startLine": 175,
+      "endLine": 188,
+      "hash": "35d3cd2b21d1a3eb288320348000dc058cd72f00df504d898f6cba3d59e06330",
+      "code": "            throw std::runtime_error(\"Recovery room limit exceeded\");\n        }\n        return rooms.try_emplace(id, Cursor{group, 0}).first->second;\n    };\n    const auto replay = [&](const std::string& id, Cursor& cursor, std::uint64_t through = 0) {\n        bool more = true;\n        while (more && !stop.stop_requested()) {\n            const auto page =\n                client.sync(id, cursor.sequence, through, 50, limits_.operation_timeout);\n            if (!page.accepted) {\n                throw std::runtime_error(\"Recovery sync rejected: \" + page.reason);\n            }\n            through = page.through_sequence;\n            for (const auto& record : page.records) {",
+      "summary": "Implements per-room sequence tracking (up to 256 rooms), live gap detection, and fixed-watermark multi-page sequence catch-up.",
+      "explanation": "Look at `dispatch()` (lines 210–242): when a live `DirectDelivery` or `GroupDelivery` arrives with `sequence`, it compares `sequence` against `cursor.sequence`: 1) If `sequence <= cursor.sequence`, it is a duplicate of a message already replayed during `sync()`—so it is silently suppressed (line 228)! 2) If `sequence > cursor.sequence + 1`, a live gap occurred—so it calls `replay(id, cursor, sequence - 1)` BEFORE publishing the live event! Look at `synchronize()` (lines 243–272): after reconnecting and rejoining `wanted_groups`, it pages `client.direct_rooms()`, drains up to 256 buffered login/join snapshots (`next_event(1ms)`) so `RoomModel` knows about groups BEFORE group messages replay, and then calls `replay(id, cursor)` for every tracked room!",
+      "risk": "If `synchronize()` replayed group messages before draining the `GroupSnapshot` emitted by `join_group()`, `RoomModel::apply()` would throw `\"group delivery precedes discovery\"`!"
+    },
+    {
+      "id": "worker-heartbeat",
+      "path": "src/client/chat_worker.cpp",
+      "symbol": "Initial Connect/Login, Recovery Loop (`resume_login` + Rejoin) & Heartbeat Cadence",
+      "startLine": 280,
+      "endLine": 293,
+      "hash": "690e8e1cc5fcf3fe19d7d8349c80b2b6295a0276022ef36d31645f7865368059",
+      "code": "            token = login.resume_token;\n            connected_ = true;\n            publish(WorkerConnected{login.username});\n        }\n        auto next_heartbeat = std::chrono::steady_clock::now() + limits_.heartbeat_interval;\n        std::uint64_t nonce = 0;\n        std::size_t attempts = 0;\n        auto delay = limits_.reconnect_delay;\n        bool recovering = false;\n        while (!stop.stop_requested()) {\n            try {\n                if (recovering) {\n                    if (attempts == limits_.reconnect_attempts) {\n                        throw std::runtime_error(\"Reconnect attempts exhausted\");",
+      "summary": "Performs initial login (saving `token = login.resume_token`), handles exponential-backoff reconnect (`250ms -> 500ms -> 1000ms -> 2000ms -> 2500ms`), and sends 10s Pings.",
+      "explanation": "When `recovering == true` (lines 291–332): checks `attempts == limits_.reconnect_attempts` (16), publishes `WorkerReconnecting`, sleeps via `wake_.wait_for(lock, stop, delay, ...)` (which wakes instantly if `stop` is requested!), doubles `delay` up to `2500ms`, connects, calls `client.resume_login(username, token)`, and if the server says `\"username is already connected\"` (because the server hasn't noticed the old half-open TCP socket died yet!), throws `NetworkError` so the worker keeps retrying until the old session expires! Then it rejoins `wanted_groups`, runs `synchronize()`, and publishes `WorkerConnected{username, true}` (`resumed = true`).",
+      "risk": "If `\"username is already connected\"` during `resume_login` threw `std::runtime_error` instead of `NetworkError`, a brief Wi-Fi blip where the client reconnects faster than the server's 30s idle timer would permanently kill the client session!"
+    },
+    {
+      "id": "room-model",
+      "path": "src/client/room_model.cpp",
+      "symbol": "apply(const ClientEvent&) — Snapshot & Delivery Router",
+      "startLine": 147,
+      "endLine": 160,
+      "hash": "8ebb9fe0abc5046a20b27b7ea4d02f478ae24d4b4ec8d7666693fcc9a4bccf57",
+      "code": "        }\n        trim_front(*oldest);\n    }\n}\nvoid RoomModel::apply(const ClientEvent& event) {\n    if (const auto* users = std::get_if<UserSnapshot>(&event)) {\n        users_ = users->usernames;\n        for (auto& room : rooms_) {\n            if (!room.group && !contains(users_, room.target)) {\n                room.available = false; // A reclaimed name must get a new view.\n            }\n        }\n    } else if (const auto* groups = std::get_if<GroupSnapshot>(&event)) {\n        groups_ = groups->groups;",
+      "summary": "Updates `users_` and `groups_` from server snapshots and routes `DirectDelivery` and `GroupDelivery` into their isolated `RoomView`s (R5).",
+      "explanation": "On `UserSnapshot`: updates `users_` and marks any direct room whose `target` is no longer in `users_` as `available = false`. That single line (`room.available = false`, line 156) guarantees that if Bob disconnects and a new Bob logs in, `open_direct(\"Bob\")` (which searches for `room.available == true`) will create a brand-new `direct-view-2` instead of reusing `direct-view-1`! On `GroupSnapshot`: creates or updates `group:group-N` views and sets `found->joined = contains(group.members, username_)`. On `DirectDelivery`: matches existing `wire_id == direct->room_id`, or binds an available provisional view for `peer`, or creates a new view, then calls `append()`.",
+      "risk": "Reusing an old direct view after a peer disconnects in ephemeral mode would mix two different sessions' conversations."
+    },
+    {
+      "id": "cli-input",
+      "path": "apps/cli/chat_console.cpp",
+      "symbol": "parse_command() — `/help`, `/users`, `/groups`, `/members`, `/dm`, `/create`, `/join`, `/group`, `/quit`",
+      "startLine": 100,
+      "endLine": 113,
+      "hash": "d7c00a833ffcbf3cf2f9ee0c59015a6aedf49aa5793bd845d2431a5ac4920b90",
+      "code": "    oversized_ = false;\n    after_cr_ = false;\n    return result;\n}\nCommand parse_command(std::string_view line) {\n    if (line.size() > kLineBytes || std::any_of(line.begin(), line.end(), [](unsigned char c) {\n            return (c < 32 && c != '\\t') || c == 127;\n        })) {\n        throw std::invalid_argument(\"invalid command line or control character\");\n    }\n    const auto verb = token(line);\n    Command result;\n    if (verb.empty()) {\n        return result;",
+      "summary": "Validates command syntax, target bounds (1–64B), and text bounds (1–4096B) before touching the worker.",
+      "explanation": "Rejects any ASCII control characters (except `'\\t'` whitespace) and enforces exact argument counts: `/help`, `/users`, `/groups`, `/quit` take 0 args; `/members` and `/join` take 1 target arg; `/create` takes the rest of the line (1–64B) as the group name (allowing spaces like `/create Study Group`); `/dm` and `/group` take a target token followed by 1–4096B of message text.",
+      "risk": "Using `token(line)` for `/create` would forbid spaces in group names."
+    },
+    {
+      "id": "build-targets",
+      "path": "CMakeLists.txt",
+      "symbol": "Dependencies, protoc Custom Command, `chat_proto`, `chat_framing` & Warning Function",
+      "startLine": 31,
+      "endLine": 44,
+      "hash": "ed6cce3252e1bcc6f437d0a40ae23b07d2258e889fc5c3d3c2de82fd88152f57",
+      "code": "    VERBATIM\n)\n\n# Consumers inherit generated-header and dependency include paths from targets.\nadd_library(chat_proto STATIC \"${CHAT_PROTO_SOURCE}\" \"${CHAT_PROTO_HEADER}\")\nadd_library(chat::proto ALIAS chat_proto)\ntarget_compile_features(chat_proto PUBLIC cxx_std_20)\ntarget_include_directories(chat_proto PUBLIC \"${CHAT_GENERATED_DIR}\")\ntarget_link_libraries(chat_proto PUBLIC protobuf::libprotobuf)\n\nadd_library(chat_framing STATIC src/protocol/framing.cpp)\nadd_library(chat::framing ALIAS chat_framing)\ntarget_compile_features(chat_framing PUBLIC cxx_std_20)\ntarget_include_directories(chat_framing PUBLIC \"${CMAKE_CURRENT_SOURCE_DIR}/include\")",
+      "summary": "Finds Protobuf, Boost.Asio, Threads, SQLite3, OpenSSL; generates `chat.pb.cc/.h` via `protobuf::protoc`; defines `chat_proto` and `chat_framing`.",
+      "explanation": "`add_custom_command` runs `protobuf::protoc` whenever `proto/chat.proto` changes, outputting into `build/<preset>/generated/`. `chat_framing` links ONLY standard C++20 (`include/`), proving the frame codec has zero socket or Protobuf dependencies.",
+      "risk": "Applying `/W4` or `-Wextra` directly to `chat_proto` would fail or flood the build with warnings inside protoc-generated C++ code."
+    }
+  ],
+  "files": [
+    {
+      "path": "proto/chat.proto",
+      "role": "Defines the strongly-typed binary application message contract (Envelope + 18 payload types) compiled by protoc into chat.pb.h and chat.pb.cc.",
+      "lineCount": 208,
+      "hash": "b23cf3f23cab5270f76ef983312080ae8ff165313fd3cbbba39e10de487fcd98",
+      "code": ""
+    },
+    {
+      "path": "include/chat/protocol/framing.hpp",
+      "role": "Declares the 1 MiB frame limit, FrameError exception, encode_frame(), and the stateful FrameDecoder incremental byte-stream parser.",
+      "lineCount": 52,
+      "hash": "c691acf56e1154ec4c4d5bc0abeaa52e48f330982a318151e51d23d449042fd1",
+      "code": ""
+    },
+    {
+      "path": "src/protocol/framing.cpp",
+      "role": "Implements 4-byte big-endian length encoding and incremental state-machine frame extraction across arbitrary TCP read boundaries.",
+      "lineCount": 91,
+      "hash": "97b2996d936fc059b6f377bab6f982e5b4c1ea1c0f0fad8c8296c0cbb4315903",
+      "code": ""
+    },
+    {
+      "path": "include/chat/protocol/message_identity.hpp",
+      "role": "Provides inline validation for client retry keys (`valid_message_key`), declares 256-bit random key generation (`new_message_key`), and computes server Unix millisecond timestamps.",
+      "lineCount": 28,
+      "hash": "d83d380135c1da1fed582444d1ffd7b50e67cbff5718dad0b25489bcd4cd4fa9",
+      "code": ""
+    },
+    {
+      "path": "src/protocol/message_identity.cpp",
+      "role": "Generates 32 cryptographically random bytes via OpenSSL RAND_bytes and encodes them as a 64-character lowercase hex string.",
+      "lineCount": 25,
+      "hash": "8547881b41597ae996b1dc36b606ac6d7013bf4ee957c1e793106bd9965fe584",
+      "code": ""
+    },
+    {
+      "path": "include/chat/transport/tls.hpp",
+      "role": "Declares TlsError, ClientTlsOptions (CA bundle + expected SAN), and ServerTlsOptions (cert chain + private key + handshake timeout) without exposing OpenSSL or Boost.Asio headers.",
+      "lineCount": 36,
+      "hash": "8799143f5ee3bb6f7f1eab3238f9565169587bc4eb4b0da49ca4d1bded40e8e7",
+      "code": ""
+    },
+    {
+      "path": "include/chat/transport/socket_stream.hpp",
+      "role": "Wraps either a plain `boost::asio::ip::tcp::socket` (loopback dev mode) or a `boost::asio::ssl::stream<tcp::socket>` (TLS 1.3 mode) behind one unified async_read_some / async_write_some interface.",
+      "lineCount": 72,
+      "hash": "285cf8409c5ee1bad09ee290171b80268ceba7a16a54043370496736e972ad39",
+      "code": ""
+    },
+    {
+      "path": "src/transport/tls.cpp",
+      "role": "Configures OpenSSL SSL_CTX to enforce TLS 1.3 only, loads server cert/key or client CA bundle, and binds strict DNS/IP Subject Alternative Name (SAN) verification.",
+      "lineCount": 93,
+      "hash": "b2a13f67ea92319d269b06b1d4f2c77ef7f2476f749fa6cae3153a10594f914f",
+      "code": ""
+    },
+    {
+      "path": "include/chat/transport/app_options.hpp",
+      "role": "Parses `--tls <CA-file> [--server-name <DNS/IP>]` or `--plaintext-dev` for `chat_cli` and `chat_gui`, rejecting missing or mixed transport flags.",
+      "lineCount": 47,
+      "hash": "905a5e411af0af175112f5252f2410624980ad6533b482a4652fe321f40c47b9",
+      "code": ""
+    },
+    {
+      "path": "apps/server/main.cpp",
+      "role": "Parses server CLI arguments (`--tls` or `--plaintext-dev`, bind address, port, SQLite path, idle timeout), constructs PingServer, hooks SIGINT/SIGTERM, and runs the Boost.Asio io_context.",
+      "lineCount": 92,
+      "hash": "dfad178f97fd4dc0f2978949dac2951055cf7e002fdeb5840029267e2b9aab31",
+      "code": ""
+    },
+    {
+      "path": "include/chat/server/ping_server.hpp",
+      "role": "Declares the top-level server class that owns the TCP acceptor, the shared hub strand, and the authoritative ChatHub.",
+      "lineCount": 44,
+      "hash": "282248a55924dff394f9c990009f6671bc752eebd29caf329bcbc7004de5471b",
+      "code": ""
+    },
+    {
+      "path": "src/server/ping_server.cpp",
+      "role": "Binds the listening socket, enforces the 64-connection cap, creates ClientSessions bound to the shared hub strand, and posts session removal onto the strand.",
+      "lineCount": 117,
+      "hash": "6071ccc9788d5cc6c8a633706d5b94a1e4ed2303991a5b77baa0dbd02efc68fa",
+      "code": ""
+    },
+    {
+      "path": "include/chat/server/client_session.hpp",
+      "role": "Declares per-connection state: SocketStream, FrameDecoder, 4 KiB read buffer, mutex-guarded bounded write queue (256 frames / 2 MiB), and steady_timer idle expiry (30s).",
+      "lineCount": 87,
+      "hash": "303bbd922368f7976db8a1163ba816b57df50fca9911dd249bb8c4d092decf75",
+      "code": ""
+    },
+    {
+      "path": "src/server/client_session.cpp",
+      "role": "Implements the server's per-client async state machine: TLS 1.3 server handshake with deadline, mutex-ordered write admission, single-writer pump, half-close EOF draining, and low-overhead idle timeout.",
+      "lineCount": 261,
+      "hash": "67457e2e2b0e5e60713ea45a4e3c62fc9331519e968dfb55af5196e368620c50",
+      "code": ""
+    },
+    {
+      "path": "include/chat/server/chat_hub.hpp",
+      "role": "Declares the central server state machine: active connections, unique usernames map, direct rooms, groups, ephemeral retry cache, and HistoryStore pointer.",
+      "lineCount": 91,
+      "hash": "c3b150365fefac0d2ecf7e534e97caecda7355a8a26795059ad1a3deeb16fbdb",
+      "code": ""
+    },
+    {
+      "path": "src/server/chat_hub.cpp",
+      "role": "Implements all server business rules (R3–R11), anti-spoofing validation, retry deduplication, commit-before-ACK routing, and presence/group snapshot broadcasts.",
+      "lineCount": 494,
+      "hash": "5a43ffdc2d0ee9d512b0458189d38905aab2d7114b4d12a6a908a66f1c759608",
+      "code": ""
+    },
+    {
+      "path": "include/chat/server/history_store.hpp",
+      "role": "Declares StoredIdentity, StoredGroup, StoredMessage, MessageIdConflict, and the HistoryStore class wrapping SQLite3.",
+      "lineCount": 91,
+      "hash": "0259fb94129cfddda5957fac4839179c60cdf52c5b80801a8490a26b84fed8e4",
+      "code": ""
+    },
+    {
+      "path": "src/server/history_store.cpp",
+      "role": "Manages SQLite3 connection in WAL + synchronous=FULL mode, RAII prepared statements and BEGIN IMMEDIATE transactions, SHA-256 resume tokens, atomic v1->v2 schema upgrade, deduplicated message insertion, and watermark sync.",
+      "lineCount": 472,
+      "hash": "d53907fe50f80e1988eca5c983b5fe1a5aa7043ad6186e52deffe86b350cfe84",
+      "code": ""
+    },
+    {
+      "path": "include/chat/client/chat_client.hpp",
+      "role": "Aliases `chat::client::ChatClient = PingClient` so application code uses the descriptive name while keeping Stage 2 PingClient compatibility.",
+      "lineCount": 12,
+      "hash": "db6d90b836e887506eb3f8ec779823f1939befc8e5f7a36c261c5d6d38f9439a",
+      "code": ""
+    },
+    {
+      "path": "include/chat/client/ping_client.hpp",
+      "role": "Declares all GUI-independent client structs (`LoginResult`, `OperationResult`, `ClientEvent` variant, `HistoryPage`, `SyncPage`, `DirectRoomsPage`, `NetworkError`) and the blocking `PingClient` (`ChatClient`) class.",
+      "lineCount": 233,
+      "hash": "c5fa1f209f9f11401f024549089c68fb0c65787ae443dd39757c053aa48b39e1",
+      "code": ""
+    },
+    {
+      "path": "src/client/ping_client.cpp",
+      "role": "Implements PingClient::Impl using an internal Boost.Asio io_context, driving async_resolve/connect/handshake/write/read synchronously with a steady_timer deadline while buffering unsolicited events.",
+      "lineCount": 648,
+      "hash": "203727826fa51e90bd2c6301f49c0ecb4c0224b6858d8f872be6b5dc77614b4b",
+      "code": ""
+    },
+    {
+      "path": "include/chat/client/chat_worker.hpp",
+      "role": "Declares the multi-threaded bridge between the non-blocking UI/CLI presentation thread and the blocking `ChatClient` networking thread (`std::jthread`).",
+      "lineCount": 104,
+      "hash": "c65da759ffd1041e2e208da16760050338d82026c11fb1a5caf25b3594e43cb1",
+      "code": ""
+    },
+    {
+      "path": "src/client/chat_worker.cpp",
+      "role": "Implements the worker thread lifecycle: connect/login, 10s heartbeat Pings, command execution with pre-assigned retry keys, 25ms event polling, and Stage 11 automatic reconnect + sequence replay.",
+      "lineCount": 441,
+      "hash": "3bc797a6eb3d729b41ba480d1e87a28ca68b6c810501c5a75be58451ad0a4eb4",
+      "code": ""
+    },
+    {
+      "path": "include/chat/client/room_model.hpp",
+      "role": "Declares the pure-C++ UI state model (`ChatLine`, `RoomView`, `RoomModel`) that manages room navigation, drafts, transcripts, and sequence deduplication without any Win32 dependencies.",
+      "lineCount": 68,
+      "hash": "f58c3afed75f4aaccb3f296b6c24e33765b6a29280a99694190a7ec24e2d367c",
+      "code": ""
+    },
+    {
+      "path": "src/client/room_model.cpp",
+      "role": "Implements room creation/eviction, provisional-to-wire room binding, sequence duplicate suppression, global LRU line trimming, and non-destructive draft management.",
+      "lineCount": 220,
+      "hash": "396396231f157c210affd8d551f0bbb5bcc08888c26a860aa639605539a6b1b7",
+      "code": ""
+    },
+    {
+      "path": "apps/cli/main.cpp",
+      "role": "Supports two modes in one binary: 1) Persistent interactive chat (`chat_cli <tls-mode> chat <host> <port> <username>`) using `ChatConsole` + `ConsoleInput`, and 2) One-shot diagnostic Ping/login (`chat_cli <tls-mode> <host> <port> [nonce] [username]`).",
+      "lineCount": 111,
+      "hash": "4083ff76af6013cdc12156f9ff49eb133139cc0736e119faeab86e039547aaed",
+      "code": ""
+    },
+    {
+      "path": "apps/cli/console_input.hpp",
+      "role": "Declares `InputChunk` and the cross-platform `ConsoleInput` class that polls terminal keystrokes, pipes, or redirected files without blocking.",
+      "lineCount": 28,
+      "hash": "50ff94d2a5eb02d5ed2755c80a3529b7f5bfdb96b2a7ba8ba818cb8b82f8f2c5",
+      "code": ""
+    },
+    {
+      "path": "apps/cli/console_input.cpp",
+      "role": "Implements non-blocking stdin reads for Windows consoles (`ReadConsoleInputW` with UTF-16 surrogate pair assembly), Windows pipes (`PeekNamedPipe`), Windows files, and POSIX descriptors (`::poll` + `::read`).",
+      "lineCount": 172,
+      "hash": "46fae37da828daa52d67929f7edaba01d27ab1ca2606469b8d6f95d8c9cb160b",
+      "code": ""
+    },
+    {
+      "path": "apps/cli/chat_console.hpp",
+      "role": "Declares `escape_text`, `LineInput` (incremental 8 KiB line accumulator with UTF-8 backspace), `parse_command`, and `ChatConsole`.",
+      "lineCount": 75,
+      "hash": "f869880d8c2817543e8d7f67e09c4cd323d6eda9220cf6528998c17db48c797c",
+      "code": ""
+    },
+    {
+      "path": "apps/cli/chat_console.cpp",
+      "role": "Implements terminal-injection escaping (`escape_text`), incremental CRLF/UTF-8 backspace line assembly (`LineInput`), `/command` parsing, and `ChatWorker` event presentation + 5-second quit receipt draining.",
+      "lineCount": 342,
+      "hash": "abd8b750eabdb742096c5da423e5e2009fabcaf07dd47c1f37c192617c0d6ebc",
+      "code": ""
+    },
+    {
+      "path": "apps/gui/main.cpp",
+      "role": "Parses wide-character Windows command line (`CommandLineToArgvW`), validates `--tls` or `--plaintext-dev`, creates the native `chat::gui::Window`, and runs the Win32 message loop.",
+      "lineCount": 63,
+      "hash": "a139400b94c9f9a536eb57c21356903fe4cd57be86554ddf6fdfbde8974313b9",
+      "code": ""
+    },
+    {
+      "path": "apps/gui/window.hpp",
+      "role": "Declares stable `ControlId` enum values (used by both layout/command handlers and automated GUI tests) and the `Window` class owning `ChatWorker` and `RoomModel`.",
+      "lineCount": 72,
+      "hash": "5c38d86bb1beb9e341eac35192e8475fc5be186d8b6755105e0eb566e2b3b74e",
+      "code": ""
+    },
+    {
+      "path": "apps/gui/window.cpp",
+      "role": "Implements UTF-8 <-> UTF-16 conversion (with embedded NUL visualization), Win32 control creation/layout, 40ms timer polling (`WM_TIMER` -> `pump()`), non-flickering transcript/draft refresh, and `WndProc` dispatch.",
+      "lineCount": 421,
+      "hash": "c05bb71c5d53afee704f2b5e66ee52c9e2b6a706192c78f1c54def1d76d72be3",
+      "code": ""
+    },
+    {
+      "path": "CMakeLists.txt",
+      "role": "Defines the dependency graph (`chat_proto` -> `chat_framing` -> `chat_shared` -> `chat_transport` -> `chat_cli_view`/`chat_gui_view` -> executables & 3 CTest suites) and ASAN/UBSAN flags.",
+      "lineCount": 182,
+      "hash": "5a06ed7f721375d798486ea263c0c0f2edd298e632c4dc301fb6cfef3e8af885",
+      "code": ""
+    }
+  ]
+}

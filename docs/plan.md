@@ -71,6 +71,11 @@ are needed for its core commands.
 
 ## Assignment completion
 
+The [interactive onboarding](onboarding.md) application is separate educational
+tooling. Its implementation, rendering/audio polish, physical performance, and
+learner evaluation have their own acceptance gates; it does not replace any
+graded live demonstration, code evidence, GUI walkthrough, or AI feature.
+
 | Stage | Work | Exit criteria and evidence |
 | --- | --- | --- |
 | **14. Room GUI** | Build a client UI with connected users, all groups and members, separate direct/group room views, message history, and text input/send controls. This may be pulled forward after Stage 7 and a minimal client API. | A user can complete R3-R11 in the UI. Every room displays its own sent and incoming text. Three-client privacy scenarios pass; no background socket work freezes the UI. |

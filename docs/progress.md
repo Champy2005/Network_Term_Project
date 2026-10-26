@@ -1,6 +1,6 @@
 # Progress tracker
 
-**Last reviewed:** 2026-10-07. This page records verified work, while the
+**Last reviewed:** 2026-10-23. This page records verified work, while the
 [implementation plan](plan.md) describes intended future work. A status changes
 to **Done** only after its exit criteria and tests pass. The
 [requirements checklist](requirements.md) separately tracks what the graded
@@ -45,6 +45,22 @@ remain pending.
 | 14. Room GUI | Windows implementation; manual acceptance pending | Separate room views/drafts, presence/group/member controls, create/self-join/send, networking worker, and recovery retention. 13 model and 8 hidden native-control tests plus socket worker cases; visual/keyboard and full GUI walkthrough pending. |
 | 15. Special features | Not started | No AI or other special feature selected or implemented. |
 | 16. Demonstration and slides | Not started | No physical-computer demo or completed slide deck. |
+
+## Interactive onboarding application
+
+On 2026-10-23, the four-file onboarding prototype was preserved under its legacy
+entry and a separate TypeScript/Vite/Three.js documentary was implemented. It has
+13 authored chapters (the supplied timings total 15:45), 71 recorded provisional
+English cues, original movable GLB cutaways, a shared narrative clock, inspection,
+ten deterministic experiments, transcript/glossary, and a lazy source atlas.
+Build-time source/asset checks and browser source hashes keep displayed evidence
+bound to the repository snapshot. [The onboarding guide](onboarding.md) records
+run commands, architecture, verification, and remaining production gates.
+
+Automated implementation checks do not establish premium visual acceptance,
+final narration, physical laptop/network performance, or the five-developer
+learning evaluation. Those remain pending. The existing manual GUI, physical
+network, terminal, AI, and coursework statuses above are unchanged.
 
 ## Engineering workflow tooling
 

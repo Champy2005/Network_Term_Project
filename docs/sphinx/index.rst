@@ -21,6 +21,7 @@ wire definitions, build configuration, and development scripts.
    /docs/recovery
    /docs/tls
    /docs/cli
+   /docs/onboarding
    /docs/requirements
    /docs/plan
    /docs/progress

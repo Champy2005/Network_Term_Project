@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Socket Chat C++20 — 3D Hardware &amp; Protocol Inspection Studio</title>
+  <style>
+    /* ==========================================================================
+       INDUSTRIAL CAD & HARDWARE INSPECTION STUDIO THEME
+       Inspired by Braun, Teenage Engineering, Linear & Precision CAD Suites.
+       100% Self-Contained Native CSS (Zero External CDN Required).
+       ========================================================================== */
+    :root {
+      --bg-studio: #121417;
+      --surface-panel: rgba(20, 22, 26, 0.92);
+      --surface-elevated: rgba(28, 31, 37, 0.95);
+      --surface-well: #0c0e11;
+      --border-hairline: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-orange: #f97316;
+      --accent-orange-hover: #fb923c;
+      --accent-orange-dim: rgba(249, 115, 22, 0.14);
+      --accent-emerald: #10b981;
+      --accent-emerald-dim: rgba(16, 185, 129, 0.13);
+      --accent-amber: #f59e0b;
+      --accent-amber-dim: rgba(245, 158, 11, 0.13);
+      --accent-red: #ef4444;
+      --accent-red-dim: rgba(239, 68, 68, 0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg-studio);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+      font-size: 12px;
+      line-height: 1.4;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    .code-font {
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    .hidden { display: none !important; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: rgba(12, 14, 17, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.28); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-orange); }
+
+    /* Full-Screen 3D WebGL Viewport & CAD Leader Overlay */
+    #world-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      cursor: grab;
+      z-index: 1;
+    }
+    #world-canvas:active { cursor: grabbing; }
+
+    #laser-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 9;
+    }
+
+    #pins-container {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    /* Precision Instrument Panel Surface */
+    .glass-panel {
+      background: var(--surface-panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-hairline);
+      border-radius: 8px;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .section-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* 3D World-Space CAD Callout Pins */
+    .pin-3d {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      pointer-events: auto;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+    }
+    .pin-3d::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -8px;
+      width: 1px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.35);
+      transform: translateX(-50%);
+    }
+    .pin-3d:hover {
+      transform: translate(-50%, -104%) scale(1.03);
+      z-index: 30;
+      border-color: var(--accent-orange);
+    }
+    .pin-idle {
+      padding: 4px 8px;
+      background: rgba(16, 18, 22, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+      opacity: 0.88;
+    }
+    .pin-active {
+      padding: 6px 10px;
+      background: rgba(20, 22, 27, 0.96);
+      border: 1.5px solid var(--accent-orange);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7), 0 0 0 3px rgba(249, 115, 22, 0.15);
+      z-index: 25;
+    }
+    .pin-active::after {
+      background: var(--accent-orange);
+      width: 2px;
+      height: 10px;
+      bottom: -10px;
+    }
+    .pin-row { display: flex; align-items: center; gap: 6px; }
+    .pin-num {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-secondary);
+    }
+    .pin-active .pin-num {
+      background: var(--accent-orange);
+      color: #0b0d10;
+    }
+    .pin-title { font-weight: 600; color: var(--text-primary); white-space: nowrap; font-size: 11.5px; }
+    .pin-code {
+      color: #fdba74;
+      font-size: 10.5px;
+      white-space: nowrap;
+      margin-top: 2px;
+      padding-top: 2px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .pin-idle .pin-code { display: none; }
+    .pin-idle:hover .pin-code { display: block; }
+
+    /* Top-Left Engineering Navigation Dock */
+    #left-hud {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      width: 262px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: calc(100vh - 148px);
+    }
+    #radar-box {
+      width: 100%;
+      height: 112px;
+      background: var(--surface-well);
+      border: 1px solid var(--border-hairline);
+      border-radius: 5px;
+      overflow: hidden;
+      cursor: pointer;
+      margin: 6px 0;
+    }
+    #radar-canvas { width: 100%; height: 100%; display: block; }
+
+    /* Top-Center Telemetry Header */
+    #top-center-hud {
+      position: fixed;
+      top: 12px;
+      left: 286px;
+      right: 438px;
+      z-index: 20;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 300px;
+    }
+
+    /* Right Collapsible Code & X-Ray Inspector */
+    #code-hud-wrapper {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      bottom: 132px;
+      width: 414px;
+      max-width: 92vw;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      transition: width 0.18s ease;
+    }
+    #btn-hud-restore {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 20;
+      padding: 8px 12px;
+      color: var(--text-primary);
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border-strong);
+    }
+    #btn-hud-restore:hover { border-color: var(--accent-orange); }
+
+    /* Bottom Subtitle & Test-Bench Console */
+    #bottom-hud {
+      position: fixed;
+      bottom: 10px;
+      left: 12px;
+      right: 12px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .bottom-row-1 {
+      padding: 9px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .bottom-row-2 {
+      padding: 6px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    /* Industrial Buttons & Switches */
+    button {
+      font-family: inherit;
+      font-size: 11.5px;
+      cursor: pointer;
+      border: none;
+      outline: none;
+    }
+    .btn-cyber {
+      padding: 5px 10px;
+      border-radius: 5px;
+      background: var(--surface-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-hairline);
+      font-weight: 600;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .btn-cyber:hover {
+      background: rgba(42, 46, 55, 0.95);
+      border-color: var(--border-strong);
+    }
+
+    .btn-primary {
+      padding: 6px 15px;
+      border-radius: 5px;
+      background: var(--accent-orange);
+      color: #0b0d10;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      transition: background 0.12s, transform 0.1s;
+    }
+    .btn-primary:hover { background: var(--accent-orange-hover); }
+    .btn-primary:active { transform: translateY(1px); }
+
+    .warp-pill {
+      padding: 4px 7px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-secondary);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 11px;
+      font-weight: 500;
+      text-align: left;
+      transition: all 0.12s;
+    }
+    .warp-pill:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+    .warp-active {
+      background: var(--accent-orange-dim) !important;
+      color: #ffedd5 !important;
+      font-weight: 600 !important;
+      border-color: var(--accent-orange) !important;
+    }
+
+    /* Hardware Test-Bench Switches */
+    .trig-btn {
+      padding: 4px 9px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.12s;
+    }
+    .trig-normal {
+      background: rgba(255, 255, 255, 0.04);
+      color: #d1fae5;
+      border: 1px solid rgba(16, 185, 129, 0.28);
+    }
+    .trig-normal:hover { border-color: var(--accent-emerald); }
+    .trig-normal-active {
+      background: var(--accent-emerald);
+      color: #06130e;
+      border: 1px solid #6ee7b7;
+      font-weight: 700;
+    }
+    .trig-danger {
+      background: rgba(239, 68, 68, 0.08);
+      color: #fecaca;
+      border: 1px solid rgba(239, 68, 68, 0.32);
+    }
+    .trig-danger:hover { border-color: var(--accent-red); }
+    .trig-danger-active {
+      background: var(--accent-red);
+      color: #ffffff;
+      border: 1px solid #fca5a5;
+      font-weight: 700;
+    }
+
+    .mode-btn {
+      padding: 4px 9px;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 11px;
+    }
+    .mode-btn:hover { color: var(--text-primary); }
+    .mode-active {
+      background: var(--surface-elevated) !important;
+      color: var(--text-primary) !important;
+      border: 1px solid var(--border-strong);
+    }
+
+    .code-pill {
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.07);
+      color: #fdba74;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 11px;
+    }
+    .badge-cyan {
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: var(--accent-orange);
+      color: #0b0d10;
+      font-weight: 700;
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
+    }
+
+    /* Code Inspector List Rows */
+    .hud-line-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3.5px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+      user-select: text;
+    }
+    .hud-line-row:hover { background: rgba(255, 255, 255, 0.04); }
+    .hud-line-active {
+      background: var(--accent-orange-dim) !important;
+      border-left: 2.5px solid var(--accent-orange);
+    }
+    .hud-line-pin { background: rgba(245, 158, 11, 0.06); }
+    .hud-ln { width: 30px; text-align: right; color: var(--text-muted); font-weight: 600; flex-shrink: 0; font-size: 11px; }
+    .hud-line-active .hud-ln { color: var(--accent-orange); font-weight: 700; }
+    .hud-star { width: 10px; color: var(--accent-amber); font-weight: bold; flex-shrink: 0; font-size: 10px; }
+    .hud-code { color: #e5e7eb; white-space: pre; overflow: hidden; text-overflow: ellipsis; flex: 1; font-size: 11.5px; }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(10, 12, 15, 0.82);
+      backdrop-filter: blur(8px);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      user-select: text;
+    }
+    .modal-window {
+      width: 100%;
+      max-width: 1040px;
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-section {
+      padding: 12px;
+      border-radius: 6px;
+      background: var(--surface-well);
+      border: 1px solid var(--border-hairline);
+      margin-bottom: 10px;
+    }
+    .modal-sec-title {
+      color: var(--accent-orange);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .modal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+    .modal-card {
+      padding: 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-hairline);
+    }
+
+    @media (max-width: 1150px) {
+      #top-center-hud { left: 280px; right: 12px; }
+      #code-hud-wrapper { top: 68px; width: 360px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 100% FULL-SCREEN THREE.JS WEBGL 3D HARDWARE INSPECTION CANVAS -->
+  <canvas id="world-canvas"></canvas>
+
+  <!-- 2D CAD LEADER LINE OVERLAY (CONNECTS CODE INSPECTOR TO ACTIVE 3D PART) -->
+  <canvas id="laser-canvas"></canvas>
+
+  <!-- FLOATING 3D WORLD-SPACE CAD CALLOUT PINS -->
+  <div id="pins-container"></div>
+
+  <!-- TOP-LEFT DOCK: SYSTEM TOPOLOGY RADAR & STATION SELECTOR -->
+  <aside id="left-hud">
+    <div class="glass-panel" style="padding: 10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+        <span class="section-kicker">TOPOLOGY SCHEMATIC</span>
+        <span id="camera-mode-badge" class="code-font" style="padding:2px 6px;border-radius:3px;background:var(--accent-orange-dim);color:#fdba74;font-weight:600;font-size:10.5px;">
+          TOUR LOCKED
+        </span>
+      </div>
+
+      <div id="radar-box" title="Click any station on the schematic to fly the 3D camera there">
+        <canvas id="radar-canvas" width="242" height="112"></canvas>
+      </div>
+
+      <div style="display:flex;gap:5px;">
+        <button id="btn-relock-camera" class="btn-cyber" style="flex:1;" title="Lock camera to guided spline tour">
+          Lock Tour
+        </button>
+        <button id="btn-focus-zoom" class="btn-cyber" title="Toggle between tight sub-assembly close-up and full machine view">
+          Close-Up
+        </button>
+        <button id="btn-overview-camera" class="btn-cyber" title="Isometric bird's-eye overview of all 10 stations">
+          Overview
+        </button>
+      </div>
+      <div class="code-font" style="display:flex;justify-content:space-between;color:var(--text-muted);font-size:10.5px;margin-top:6px;">
+        <span>Fly: <strong style="color:var(--text-secondary);">WASD + QE</strong></span>
+        <span>Orbit: <strong style="color:var(--text-secondary);">Drag / Wheel</strong></span>
+      </div>
+    </div>
+
+    <div class="glass-panel" style="padding: 9px; overflow-y: auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span class="section-kicker">10 HARDWARE STATIONS</span>
+        <div style="display:flex;gap:4px;">
+          <button id="btn-open-navigator" class="warp-pill code-font" style="color:var(--text-primary);border-color:var(--border-strong);">34 Files</button>
+          <button id="btn-open-exam" class="warp-pill code-font" style="color:#fcd34d;border-color:rgba(245,158,11,0.35);">Defense</button>
+        </div>
+      </div>
+      <div id="chapter-pills" style="display:grid;grid-template-columns:1fr 1fr;gap:4px;"></div>
+    </div>
+  </aside>
+
+  <!-- TOP-CENTER HEADER: ACTIVE STATION & ASSEMBLY TELEMETRY -->
+  <header id="top-center-hud" class="glass-panel">
+    <div style="min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span id="top-act-badge" class="badge-cyan code-font">ACT I • MISSION 1</span>
+        <span id="top-thread-badge" class="code-font" style="padding:2px 6px;border-radius:3px;background:rgba(255,255,255,0.06);color:var(--text-secondary);font-weight:600;font-size:10.5px;max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-block;">
+          Thread: Multi-Tier
+        </span>
+      </div>
+      <div id="top-machine-title" style="font-weight:700;font-size:13px;color:var(--text-primary);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        Initializing 3D Engineering Studio...
+      </div>
+    </div>
+    <div style="text-align:right;flex-shrink:0;">
+      <div id="top-step-counter" class="code-font" style="color:var(--accent-orange);font-weight:700;font-size:11.5px;">STEP 1 / 151</div>
+      <div id="top-file-badge" class="code-font" style="color:var(--text-secondary);font-size:11px;">proto/chat.proto</div>
+    </div>
+  </header>
+
+  <!-- RIGHT DOCK: COLLAPSIBLE SOURCE CODE & LOW-LEVEL X-RAY INSPECTOR -->
+  <aside id="code-hud-wrapper" class="glass-panel" style="overflow:hidden;">
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border-hairline);display:flex;justify-content:space-between;align-items:center;background:rgba(12,14,17,0.65);">
+      <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--accent-orange);"></span>
+        <span id="hud-file-title" class="code-font" style="font-weight:700;color:var(--text-primary);">proto/chat.proto</span>
+        <span id="hud-line-range" class="code-font" style="padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.06);color:var(--text-secondary);font-size:10.5px;">L1–38</span>
+      </div>
+      <div style="display:flex;gap:4px;">
+        <button id="btn-hud-size" class="btn-cyber" style="padding:2px 7px;font-size:10.5px;">Expand</button>
+        <button id="btn-hud-collapse" class="btn-cyber" style="padding:2px 7px;font-size:10.5px;">Hide [H]</button>
+      </div>
+    </div>
+
+    <!-- Active Line 3-Part Low-Level Engineering X-Ray -->
+    <div style="padding:10px;background:var(--surface-well);border-bottom:1px solid var(--border-hairline);user-select:text;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span id="xray-line-badge" class="badge-cyan code-font">LINE 12</span>
+          <span id="xray-pinned-badge" class="code-font" style="padding:2px 6px;border-radius:3px;background:var(--accent-amber-dim);color:#fcd34d;font-weight:600;font-size:10.5px;">
+            ★ KEY DEFENSE LINE
+          </span>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <button id="btn-line-up" class="btn-cyber" style="padding:2px 7px;font-size:10.5px;">↑ Line</button>
+          <button id="btn-line-down" class="btn-cyber" style="padding:2px 7px;font-size:10.5px;">↓ Line</button>
+        </div>
+      </div>
+
+      <pre id="xray-code-line" class="code-font" style="padding:7px 9px;border-radius:4px;background:#07080a;color:#f3f4f6;border-left:3px solid var(--accent-orange);border-top:1px solid var(--border-hairline);border-right:1px solid var(--border-hairline);border-bottom:1px solid var(--border-hairline);overflow-x:auto;margin-bottom:8px;font-size:11.5px;"></pre>
+
+      <div style="display:flex;flex-direction:column;gap:5px;line-height:1.38;">
+        <div style="padding:5px 8px;border-left:2px solid var(--accent-emerald);background:rgba(255,255,255,0.02);">
+          <strong class="code-font" style="color:var(--accent-emerald);font-size:10.5px;">01 / OPERATION: </strong>
+          <span id="xray-what" style="color:var(--text-primary);"></span>
+        </div>
+        <div style="padding:5px 8px;border-left:2px solid #60a5fa;background:rgba(255,255,255,0.02);">
+          <strong class="code-font" style="color:#93c5fd;font-size:10.5px;">02 / LOW-LEVEL MECHANICS: </strong>
+          <span id="xray-low" style="color:#e5e7eb;"></span>
+        </div>
+        <div style="padding:5px 8px;border-left:2px solid var(--accent-amber);background:rgba(245,158,11,0.04);">
+          <strong class="code-font" style="color:#fbbf24;font-size:10.5px;">03 / FAILURE MODE IF BROKEN: </strong>
+          <span id="xray-why" style="color:#fef3c7;"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Synchronized Source Code Lines -->
+    <div id="hud-code-list" style="flex:1;overflow-y:auto;"></div>
+  </aside>
+
+  <button id="btn-hud-restore" class="glass-panel hidden">Show Code Inspector [H]</button>
+
+  <!-- BOTTOM CONSOLE: NARRATIVE, HARDWARE TEST-BENCH & PLAYBACK -->
+  <footer id="bottom-hud">
+    <div class="glass-panel bottom-row-1">
+      <div style="flex:1;min-width:260px;user-select:text;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="subtitle-scene-tag" class="code-font" style="padding:2px 6px;border-radius:3px;background:rgba(255,255,255,0.07);color:var(--text-secondary);font-weight:700;font-size:10.5px;">
+            SCENE 1 / 85
+          </span>
+          <strong id="subtitle-heading" style="font-size:12.5px;color:var(--text-primary);">3D Hardware &amp; Protocol Inspection Studio</strong>
+        </div>
+        <div id="subtitle-body" style="color:var(--text-secondary);margin-top:4px;line-height:1.4;max-height:54px;overflow-y:auto;"></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:5px;border-left:1px solid var(--border-hairline);padding-left:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span class="section-kicker" style="color:var(--text-secondary);">TEST BENCH // LIVE 3D STATE INJECTION</span>
+          <span id="sim-status-pill" class="code-font" style="color:#6ee7b7;font-weight:600;font-size:11px;">Nominal Operation</span>
+        </div>
+        <div id="trigger-buttons-bar" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+      </div>
+    </div>
+
+    <div class="glass-panel bottom-row-2">
+      <div style="display:flex;align-items:center;gap:3px;background:var(--surface-well);padding:3px;border-radius:5px;border:1px solid var(--border-hairline);">
+        <button data-mode="smart" class="mode-btn mode-active">Guided + Key Lines (151)</button>
+        <button data-mode="scene" class="mode-btn">85 Scenes</button>
+        <button data-mode="all_lines" class="mode-btn">All 5,559 Lines</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button id="btn-prev-scene" class="btn-cyber">Prev Scene</button>
+        <button id="btn-prev-step" class="btn-cyber">← Step Back</button>
+        <button id="btn-play-pause" class="btn-cyber" style="border-color:rgba(16,185,129,0.35);color:#6ee7b7;">
+          <span id="play-icon">▶</span> <span id="play-label">Auto-Play</span>
+        </button>
+        <button id="btn-next-step" class="btn-primary">Step Forward →</button>
+        <button id="btn-next-scene" class="btn-cyber">Next Scene</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;min-width:190px;flex:1;max-width:280px;">
+        <div id="scrubber-track" style="flex:1;height:6px;background:var(--surface-well);border:1px solid var(--border-hairline);border-radius:3px;overflow:hidden;cursor:pointer;">
+          <div id="scrubber-fill" style="height:100%;width:1%;background:var(--accent-orange);"></div>
+        </div>
+        <select id="autoplay-speed" class="code-font" style="padding:3px 6px;border-radius:4px;background:var(--surface-well);color:var(--text-secondary);border:1px solid var(--border-hairline);font-size:11px;">
+          <option value="4500">4.5s</option>
+          <option value="2800" selected>2.8s</option>
+          <option value="1300">1.3s</option>
+        </select>
+      </div>
+    </div>
+  </footer>
+
+  <!-- MODAL 1: ALL 34 FILES & GLOBAL LINE SEARCH -->
+  <div id="modal-navigator" class="modal-backdrop hidden">
+    <div class="glass-panel modal-window">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border-hairline);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <strong style="font-size:14px;color:var(--text-primary);">Source Index — 34 Files, 77 Functional Blocks &amp; 5,559 Lines</strong>
+          <div style="color:var(--text-secondary);font-size:11px;">Select any block or search result to move the 3D camera directly to that hardware station and line.</div>
+        </div>
+        <button id="btn-close-navigator" class="btn-cyber">Close</button>
+      </div>
+      <div style="padding:10px 16px;border-bottom:1px solid var(--border-hairline);">
+        <input id="nav-search-input" type="text" placeholder="Search C++ symbol, function, SQL statement, or protocol invariant (e.g. 'BEGIN IMMEDIATE', 'weak_ptr', 'run_one', 'SAN')..."
+          style="width:100%;padding:7px 10px;border-radius:5px;background:var(--surface-well);border:1px solid var(--border-strong);color:var(--text-primary);font-size:12px;" />
+      </div>
+      <div id="nav-modal-body" style="flex:1;overflow-y:auto;padding:14px;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: ORAL DEFENSE & R1-R11 MATRIX -->
+  <div id="modal-exam" class="modal-backdrop hidden">
+    <div class="glass-panel modal-window">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border-hairline);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <strong style="font-size:14px;color:var(--text-primary);">Oral Defense Preparation — Flashcard Drill, R1–R11 Matrix &amp; Architecture Q&amp;A</strong>
+          <div style="color:var(--text-secondary);font-size:11px;">Test yourself on any of the 96 pinned defense lines or jump straight to the corresponding 3D assembly.</div>
+        </div>
+        <button id="btn-close-exam" class="btn-cyber">Close</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;">
+        <div class="modal-section">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <strong style="color:var(--accent-orange);">Line-Level Defense Drill: Explain Operation, Mechanics &amp; Failure Mode</strong>
+            <div style="display:flex;gap:6px;">
+              <button id="btn-drill-reveal" class="btn-cyber">Reveal Breakdown</button>
+              <button id="btn-drill-jump" class="btn-cyber">Inspect in 3D</button>
+              <button id="btn-drill-next" class="btn-primary">Next Random Line</button>
+            </div>
+          </div>
+          <div id="drill-location" class="code-font" style="color:var(--text-secondary);margin-bottom:4px;"></div>
+          <pre id="drill-code" class="code-font" style="padding:8px;border-radius:4px;background:#07080a;color:var(--text-primary);border:1px solid var(--border-hairline);overflow-x:auto;"></pre>
+          <div id="drill-answer" class="hidden" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
+            <div class="modal-card"><strong style="color:var(--accent-emerald);">01 / Operation</strong><p id="drill-what" style="margin-top:4px;color:var(--text-secondary);"></p></div>
+            <div class="modal-card"><strong style="color:#93c5fd;">02 / Low-Level Mechanics</strong><p id="drill-low" style="margin-top:4px;color:var(--text-secondary);"></p></div>
+            <div class="modal-card"><strong style="color:#fbbf24;">03 / Failure Mode</strong><p id="drill-why" style="margin-top:4px;color:var(--text-secondary);"></p></div>
+          </div>
+        </div>
+        <div>
+          <div class="modal-sec-title">Graded Requirements (R1–R11) to 3D Station Mapping</div>
+          <div id="exam-req-list" class="modal-grid"></div>
+        </div>
+        <div>
+          <div class="modal-sec-title">10 Core Oral Defense Questions &amp; Code Citations</div>
+          <div id="exam-qa-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="three.min.js"></script>
+  <script src="codebase_data.js"></script>
+  <script src="world3d.js"></script>
+  <!-- ARTIFACT_READY -->
+</body>
+</html>

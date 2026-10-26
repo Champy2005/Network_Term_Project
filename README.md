@@ -20,6 +20,10 @@ choice, not an assignment mandate.
 
 ## Start here
 
+For an interactive visual introduction, see [Inside Socket Chat](docs/onboarding.md).
+It follows a message through the system with narrated cutaways, experiments,
+and source inspection. Run its browser application from `onboarding/`.
+
 1. Follow the setup guide for [Windows](docs/setup/windows.md),
    [macOS](docs/setup/macos.md), or [Linux](docs/setup/linux.md).
 2. From the repository root, configure, build, and test:
