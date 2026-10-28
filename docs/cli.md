@@ -29,6 +29,7 @@ The executable syntax is:
 
 ```text
 chat_cli <transport-mode> chat <host> <port> <username>
+chat_cli <transport-mode> mcp <host> <port> <username>
 chat_cli <transport-mode> <host> <port> [nonce] [username]
 ```
 
@@ -48,6 +49,10 @@ failures print a terminal reason and exit even if stdin remains open.
 | `/create Study group` | Create a group with that spaced name; only you join initially. |
 | `/join group-ID` | Request your own membership. |
 | `/group group-ID message text` | Send to a group; server membership is required. |
+| `/history room-ID` | Load stored room history from the SQLite database. |
+| `/summarize [room-ID]` | Run TextRank summarization and VADER sentiment on the room transcript. |
+| `/sentiment message text` | Run VADER valence lexicon sentiment analysis on literal text. |
+| `/ai prompt text` | Execute a natural-language agent prompt or tool-calling action. |
 | `/quit` | Stop input, drain admitted operation receipts, then disconnect. |
 
 Copy the opaque ID printed in `OK ... create room="..."` or `GROUP` when joining

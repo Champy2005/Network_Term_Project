@@ -199,4 +199,24 @@ TEST_F(RoomModelTest, DirectRecoveryUsesServerRoomIdentityRatherThanPresenceName
     EXPECT_EQ(model.current()->last_sequence,
               0); // Directory counters are not applied-message cursors.
 }
+/// @brief On-demand history pages merge earlier records in sequence order without duplicating live
+/// lines.
+TEST_F(RoomModelTest, ApplyHistoryMergesEarlierRecordsInOrderWithoutDuplicates) {
+    model.apply(chat::client::GroupSnapshot{{{"group-1", "Study", {"alice", "bob"}}}});
+    model.open_group("group-1");
+    model.apply(chat::client::GroupDelivery{"bob", "group-1", "live third", "m3", 3, 30});
+    chat::client::HistoryPage page;
+    page.accepted = true;
+    page.group = true;
+    page.room_id = "group-1";
+    page.records = {{1, "alice", "group-1", "stored first", "m1", 1, 10},
+                    {2, "bob", "group-1", "stored second", "m2", 2, 20},
+                    {3, "bob", "group-1", "live third", "m3", 3, 30}};
+    model.apply_history(page);
+    ASSERT_EQ(model.current()->lines.size(), 3U);
+    EXPECT_EQ(model.current()->lines[0].text, "stored first");
+    EXPECT_EQ(model.current()->lines[1].text, "stored second");
+    EXPECT_EQ(model.current()->lines[2].text, "live third");
+    EXPECT_EQ(model.current()->last_sequence, 3U);
+}
 } // namespace

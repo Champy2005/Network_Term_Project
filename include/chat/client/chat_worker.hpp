@@ -11,7 +11,7 @@
 
 namespace chat::client {
 /// @brief Outbound action whose identity/authorization is still checked by the server.
-enum class CommandKind { direct, create_group, join_group, group };
+enum class CommandKind { direct, create_group, join_group, group, history };
 /// @brief Worker and operation time budgets plus command/update admission bounds.
 struct WorkerLimits {
     std::chrono::milliseconds operation_timeout{3000}, poll_timeout{25};
@@ -42,6 +42,11 @@ struct WorkerDirectRoom {
     /// @brief Private directory entry authorized by the server for this resumed identity.
     DirectRoomInfo room;
 };
+/// @brief Authorized room history page loaded on demand by a client command.
+struct WorkerHistory {
+    /// @brief Ascending stored messages validated by the headless client.
+    HistoryPage page;
+};
 /// @brief Terminal reason, latched separately so queue overflow is never silent.
 struct WorkerDisconnected {
     std::string reason;
@@ -54,7 +59,7 @@ struct WorkerCompleted {
     OperationResult result;
 };
 using WorkerUpdate = std::variant<WorkerConnected, WorkerDisconnected, WorkerCompleted, ClientEvent,
-                                  WorkerReconnecting, WorkerDirectRoom>;
+                                  WorkerReconnecting, WorkerDirectRoom, WorkerHistory>;
 /// @brief One networking thread owns ChatClient; the UI submits and polls plain values.
 /// Start/poll are called by one UI thread. disconnect() only requests stop;
 /// destruction joins after at most the current bounded operation/poll deadline.

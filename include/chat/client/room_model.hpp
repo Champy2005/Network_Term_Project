@@ -34,6 +34,8 @@ class RoomModel {
     void disconnected();
     /// @brief Apply a complete snapshot or route a delivery to its own room.
     void apply(const ClientEvent& event);
+    /// @brief Merge an authorized history page into its room without duplicating live lines.
+    void apply_history(const HistoryPage& page);
     /// @brief Rebind a server-authorized durable room without trusting a peer's display name.
     void restore_direct(const DirectRoomInfo& room);
     /// @brief Select a connected peer's current room, creating a provisional view.

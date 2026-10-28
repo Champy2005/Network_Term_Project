@@ -48,6 +48,14 @@ std::size_t update_size(const WorkerUpdate& update) {
                 return sizeof(T) + value.username.size();
             } else if constexpr (std::is_same_v<T, WorkerDirectRoom>) {
                 return sizeof(T) + value.room.room_id.size() + value.room.peer.size();
+            } else if constexpr (std::is_same_v<T, WorkerHistory>) {
+                std::size_t size =
+                    sizeof(T) + value.page.room_id.size() + value.page.reason.size();
+                for (const auto& record : value.page.records) {
+                    size += sizeof(HistoryRecord) + record.sender.size() + record.recipient.size() +
+                            record.text.size() + record.message_id.size();
+                }
+                return size;
             } else if constexpr (std::is_same_v<T, WorkerDisconnected> ||
                                  std::is_same_v<T, WorkerReconnecting>) {
                 return sizeof(T) + value.reason.size();
@@ -113,11 +121,15 @@ void ChatWorker::disconnect() {
 std::optional<std::uint64_t> ChatWorker::submit(CommandKind kind, std::string target,
                                                 std::string text) {
     if (kind != CommandKind::direct && kind != CommandKind::group &&
-        kind != CommandKind::create_group && kind != CommandKind::join_group) {
+        kind != CommandKind::create_group && kind != CommandKind::join_group &&
+        kind != CommandKind::history) {
         return std::nullopt;
     }
     if (target.empty() || target.size() > 64 || text.size() > 4096 ||
-        ((kind == CommandKind::direct || kind == CommandKind::group) && text.empty())) {
+        ((kind == CommandKind::direct || kind == CommandKind::group) && text.empty()) ||
+        ((kind == CommandKind::create_group || kind == CommandKind::join_group ||
+          kind == CommandKind::history) &&
+         !text.empty())) {
         return std::nullopt;
     }
     std::lock_guard lock(mutex_);
@@ -370,8 +382,25 @@ void ChatWorker::run(const std::stop_token& stop, const std::string& host, std::
                     case CommandKind::join_group:
                         result = client.join_group(active->target, limits_.operation_timeout);
                         break;
+                    case CommandKind::history: {
+                        auto page =
+                            client.history(active->target, 0, 50, limits_.operation_timeout);
+                        result.accepted = page.accepted;
+                        result.resource_id =
+                            page.room_id.empty() ? active->target : page.room_id;
+                        result.error = page.error;
+                        result.reason = page.reason;
+                        if (page.accepted) {
+                            if (!token.empty()) {
+                                static_cast<void>(track(result.resource_id, page.group));
+                            }
+                            publish(WorkerHistory{std::move(page)});
+                        }
+                        break;
                     }
-                    if (result.accepted && !token.empty()) {
+                    }
+                    if (result.accepted && !token.empty() &&
+                        active->kind != CommandKind::history) {
                         if (active->kind == CommandKind::create_group ||
                             active->kind == CommandKind::join_group) {
                             wanted_groups.insert(result.resource_id);
@@ -407,7 +436,8 @@ void ChatWorker::run(const std::stop_token& stop, const std::string& host, std::
                 client.close();
                 // Only messages have durable retry keys. Never blindly duplicate group creation.
                 if (active && (active->kind == CommandKind::create_group ||
-                               active->kind == CommandKind::join_group)) {
+                               active->kind == CommandKind::join_group ||
+                               active->kind == CommandKind::history)) {
                     if (active->kind == CommandKind::join_group) {
                         wanted_groups.insert(active->target);
                     }

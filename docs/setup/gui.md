@@ -82,8 +82,9 @@ Tokens, cursors, and retry queues remain in memory only for the running worker;
 application restart does not restore them. Ephemeral servers do not support
 automatic recovery. Terminal failure or manual reconnect discards pending
 attempts; manually sending an uncertain draft again uses a fresh key and may
-duplicate earlier acceptance. There is no general history browser or immediate
-quiet-group history loading. AI remains later work. See [recovery](../recovery.md),
+duplicate earlier acceptance. Choose **Load history** to fetch authorized stored
+room messages from SQLite on demand, or use the **AI prompt / Run AI / Summarize / Sentiment**
+controls and optional `--agent-port <port>` MCP server; see [AI & MCP Agent](../ai.md), [recovery](../recovery.md),
 [history](../history.md), and [message reliability](../reliability.md).
 
 For eventual LAN use, bind the server to its LAN address or `0.0.0.0` and enter

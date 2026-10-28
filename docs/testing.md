@@ -14,9 +14,9 @@ Workflow-tool tests separately cover malformed artifacts/config, failure and
 empty-test rejection, partial results, interruption, and owned-process cleanup.
 These checks do not replace new feature tests or manual/physical acceptance.
 
-On Windows the suite has three CTest targets: `chat_tests` with 37 unit cases,
-`chat_integration_tests` with 157 real-socket cases, and `chat_gui_tests` with
-8 hidden native-control cases (202 total). The 12 original unit tests
+On Windows the suite has three CTest targets: `chat_tests` with 42 unit cases,
+`chat_integration_tests` with 160 real-socket cases, and `chat_gui_tests` with
+9 hidden native-control cases (211 total). The 12 original unit tests
 cover big-endian frame encoding, fragmented input, multiple
 frames per feed, size bounds, EOF truncation, Protobuf round-trip, and malformed
 serialized payload rejection. Debug, Release, and ASAN each passed locally on
@@ -157,7 +157,7 @@ Native-control flows use a storage-enabled in-memory SQLite server. A server/CLI
 subprocess smoke also verifies file startup, login/Ping, and reopening after
 process termination; it does not simulate hardware power loss.
 
-After building Debug, `python tools/check_clangd.py` checks all 52 handwritten
+After building Debug, `python tools/check_clangd.py` checks all 58 handwritten
 C++ sources/headers with the same database/configuration as Zed and VS Code.
 It treats printed compiler/clang-tidy warnings as failures too, stores logs
 under `build/tooling/clangd`, and skips unrelated refactoring-location tests.

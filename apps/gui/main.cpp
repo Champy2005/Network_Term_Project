@@ -41,7 +41,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         if (!options.operands.empty()) {
             throw std::invalid_argument("unexpected GUI arguments");
         }
-        chat::gui::Window application(true, {}, options.tls);
+        chat::gui::Window application(true, {}, options.tls, options.agent_port);
         const auto window = application.create(instance);
         MSG message{};
         int result = 0;

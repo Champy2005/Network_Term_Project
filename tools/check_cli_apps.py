@@ -111,6 +111,15 @@ def exercise(preset: str, encrypted: bool) -> None:
         alice.process.stdin.close()
         assert alice.process.wait(timeout=5) == 0
         alice.wait_line(r"^OK 3 dm")
+        mcp = Process([executable, *client_mode, "mcp", "127.0.0.1", port, "mcp_agent"])
+        owned.append(mcp)
+        mcp.send('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n')
+        mcp.wait_line(r'"protocolVersion":"2024-11-05"')
+        mcp.send('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"send_direct_message","arguments":{"recipient":"bob","text":"mcp_smoke_ok"}}}\n')
+        mcp.wait_line(r'"isError":false')
+        bob.wait_line(r"^DM .*mcp_smoke_ok")
+        mcp.process.stdin.close()
+        assert mcp.process.wait(timeout=5) == 0
         for client, code in ((bob, 1), (charlie, 0)):
             client.send("/quit\n/create must_not_run\n")
             assert client.process.wait(timeout=5) == code

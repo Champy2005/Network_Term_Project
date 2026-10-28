@@ -34,6 +34,11 @@ def find_doxygen() -> str:
         candidate = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "doxygen/bin/doxygen.exe"
         if candidate.is_file():
             return str(candidate)
+        winget = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft/WinGet/Links/doxygen.exe"
+        if winget.is_file():
+            return str(winget)
+        if candidate.is_file():
+            return str(candidate)
     raise RuntimeError("Doxygen is missing; see docs/setup/tooling.md for installation commands")
 
 

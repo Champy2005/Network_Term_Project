@@ -9,7 +9,7 @@ operations and typed events; `chat_cli` provides persistent chat and Ping/login 
 The Stage 14 Windows GUI now uses a portable `RoomModel` and `ChatWorker`.
 SQLite/WAL history and message IDs/sequences/retry deduplication are implemented
 through the headless API. The worker now provides bounded identity resume and
-ordered sequence catch-up, retaining GUI drafts/transcripts. Verified TLS 1.3 is implemented; AI remains future work. Automated acceptance and pending manual checks
+ordered sequence catch-up, retaining GUI drafts/transcripts. Verified TLS 1.3, Stage 15 AI/MCP agent tools, and on-demand history loading are implemented. Automated acceptance and pending manual checks
 are recorded separately in [progress](progress.md).
 
 The assignment requires separate client and server programs using socket
@@ -481,5 +481,4 @@ retry completion, cancellation, and display-retention limits.
 The [implementation plan](plan.md) records stages and exit criteria. The
 [progress tracker](progress.md) records verified completion separately from
 this architecture proposal. The Windows GUI provides each room's display and
-draft/send controls; manual acceptance remains pending. The project must still
-demonstrate an AI feature to earn the assignment's special-feature points.
+draft/send controls; manual acceptance remains pending. Stage 15 implements `chat::ai::AiEngine` (TextRank + VADER) and `chat::ai::McpDispatcher` / `LoopbackAgentServer` (`include/chat/ai/`, `src/ai/`) for Special Points 1 and 2; see [AI & MCP Agent](ai.md).

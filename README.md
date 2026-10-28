@@ -15,6 +15,8 @@ choice, not an assignment mandate.
 > Stage 11 adds bounded worker reconnect, durable identity resume, and ordered catch-up.
 > Stage 12 adds verified TLS 1.3, explicit executable transport modes, and local certificate tooling.
 > Stage 13 adds a persistent worker-backed chat CLI and bounded console input.
+> Stage 15 adds an embedded TextRank/VADER AI assistant, an MCP JSON-RPC 2.0 external agent server (`stdio` and `--agent-port`), and on-demand GUI/CLI room history loading.
+> Stage 16 adds the 20-slide implementation-explanation generator (`tools/build_slides.py`) and LAN/agent demo launcher (`tools/demo.py`).
 > Manual GUI and physical-network acceptance remain pending.
 > [Progress](docs/progress.md) records the verified checkpoint and next tasks.
 
@@ -188,7 +190,9 @@ expiry. See the [heartbeat guide](docs/heartbeats.md) for limits and cancellatio
 | `include/chat/server/`, `src/server/` | Server transport, routing, state | Authoritative hub, bounded sessions, and transactional SQLite history |
 | `apps/server/`, `apps/cli/` | Separate server and CLI entry points | Persistent chat and Ping/login diagnostics |
 | `apps/gui/` | Windows client entry point and native controls | Room navigation, drafts, transcripts, create/join/send |
-| `tests/unit/`, `tests/integration/` | Component, socket, and hidden native-control tests | 37 unit, 157 socket, and 8 GUI cases |
+| `tests/unit/`, `tests/integration/` | Component, socket, and hidden native-control tests | 42 unit, 160 socket, and 9 GUI cases |
+| `include/chat/ai/`, `src/ai/` | TextRank summarization, VADER sentiment, NL router, and MCP JSON-RPC 2.0 server | Implemented |
+| `tools/build_slides.py`, `tools/demo.py` | 20-slide Implementation Explanation generator and live LAN/MCP demo launcher | Implemented |
 | `docs/` | Setup, architecture, plan, testing, and assignment sources | Available |
 | `include/chat/transport/`, `src/transport/` | Verified TLS and common socket I/O | TLS 1.3 and explicit loopback development mode |
 | `certs/` | Local TLS certificate guidance | Generator output stays ignored |

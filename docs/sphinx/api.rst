@@ -77,6 +77,8 @@ Room model and networking worker
 
 .. doxygenstruct:: chat::client::WorkerDirectRoom
 
+.. doxygenstruct:: chat::client::WorkerHistory
+
 .. doxygenstruct:: chat::client::WorkerDisconnected
 
 .. doxygenstruct:: chat::client::WorkerCompleted
@@ -147,3 +149,24 @@ Server
 .. doxygenclass:: chat::server::MessageIdConflict
 
 .. doxygenclass:: chat::server::HistoryStore
+
+AI and MCP agent tools
+----------------------
+
+.. doxygenstruct:: chat::ai::SentimentScore
+
+.. doxygenstruct:: chat::ai::RoomSummary
+
+.. doxygenstruct:: chat::ai::ActionItemsResult
+
+.. doxygenstruct:: chat::ai::LlmEndpointOptions
+
+.. doxygenclass:: chat::ai::AiEngine
+
+.. doxygenstruct:: chat::ai::AgentActionResult
+
+.. doxygenclass:: chat::ai::AgentController
+
+.. doxygenclass:: chat::ai::McpDispatcher
+
+.. doxygenclass:: chat::ai::LoopbackAgentServer

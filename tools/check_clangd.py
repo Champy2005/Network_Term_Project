@@ -1,6 +1,7 @@
 """Check every owned C++ source/header using the same config as both editors."""
 
 import argparse
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,6 +17,10 @@ def main() -> int:
     parser.add_argument("--clangd", default="clangd", help="Executable name or full path")
     args = parser.parse_args()
     executable = shutil.which(args.clangd)
+    if not executable and os.name == "nt" and args.clangd == "clangd":
+        winget = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft/WinGet/Links/clangd.exe"
+        if winget.is_file():
+            executable = str(winget)
     if not executable:
         parser.error("clangd is missing; install it and add it to PATH")
     for required in ("compile_commands.json", "generated/chat.pb.h"):

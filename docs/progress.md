@@ -42,9 +42,9 @@ remain pending.
 | 11. Reconnect and sync | Done (automated) | Private sequence/directory APIs, fixed replay watermarks, bounded identity resume and chosen-group rejoin, saved-key retry, ordered replay/duplicate suppression, and GUI retention; 15 socket, 2 model, and 1 hidden-control cases pass in all presets. |
 | 12. TLS | Done (automated); LAN/manual acceptance pending | Verified TLS 1.3, DNS/IP SAN and chain/validity checks, explicit loopback development, handshake deadlines/cancellation, encrypted privacy/recovery; 17 socket, 3 options, and 2 hidden-control cases pass in all presets. |
 | 13. Client API/CLI polish | Done (automated); terminal acceptance pending | Typed headless API, worker-backed persistent CLI discovery/DM/create/join/group flows, bounded stdin/receipt draining, TLS replay, terminal failure, and unknown-enum admission; 9 unit and 11 socket/presentation cases plus real three-process smoke pass. |
-| 14. Room GUI | Windows implementation; manual acceptance pending | Separate room views/drafts, presence/group/member controls, create/self-join/send, networking worker, and recovery retention. 13 model and 8 hidden native-control tests plus socket worker cases; visual/keyboard and full GUI walkthrough pending. |
-| 15. Special features | Not started | No AI or other special feature selected or implemented. |
-| 16. Demonstration and slides | Not started | No physical-computer demo or completed slide deck. |
+| 14. Room GUI | Windows implementation; manual acceptance pending | Separate room views/drafts, presence/group/member controls, create/self-join/send, on-demand history loading, AI assistant controls, networking worker, and recovery retention. 14 model and 9 hidden native-control tests plus socket worker cases; visual/keyboard and full GUI walkthrough pending. |
+| 15. Special features | Done (automated); live demo pending | Special Points 1-4 implemented: TextRank + VADER AI assistant & NL agent (`FEAT-15A`), MCP JSON-RPC 2.0 server over stdio and loopback TCP (`FEAT-15B`), TLS 1.3 (`SEC-12A`), and SQLite/WAL history + gapless sync (`DATA-08A`/`NET-10A`/`NET-11A`). 5 AI unit, 3 agent socket, and 1 GUI AI/history/MCP test cases plus subprocess smoke pass. |
+| 16. Demonstration and slides | Slide deck & demo tooling ready; physical LAN demo pending | `tools/build_slides.py` generates and verifies the 20-slide deck (`build/slides/index.html`) with 14 validated C++ snapshot pairs; `tools/demo.py` automates LAN TLS certs, server/client launch, and live MCP agent control. Physical two-computer run pending. |
 
 ## Interactive onboarding application
 
@@ -160,10 +160,10 @@ assignment stage.
 | API-13A | 13, after Stage 12 | Stable headless client API and persistent/diagnostic CLI; API event and reconnect tests. | TBD | Done (automated): core CLI flows/privacy, typed events, encrypted recovery, bounded input/exit, and real executable smoke pass; native terminal walkthrough pending. |
 | UI-14A | 14, after Stage 7 and minimum client API | User/group navigation and separate direct/group message views with text send controls; manual R5-R6 walkthrough. | TBD | Windows controls/model implemented; automated tests pass; manual walkthrough pending. |
 | UI-14B | 14, after UI-14A | Three-client GUI acceptance for R3-R11, backed by wire-level privacy tests. | TBD | Automated hidden-window plus two headless-client flows pass; three visible GUI clients and physical acceptance pending. |
-| FEAT-15A | 15, after Part 2 | Select and implement an AI special feature; model reference, test, live demo, and code snapshot. | TBD | Not started |
-| FEAT-15B | 15, after Part 2 | Select up to three other special features, then implement and verify each claimed one with a live demo and code snapshot. | TBD | Not started |
-| DEMO-16A | 16, after UI-14B | Server plus clients on two physical computers; record machines, network, version, and R1-R11 results. | TBD | Not started |
-| DEMO-16B | 16, after DEMO-16A | Final implementation-explanation slides with required code snapshots and feature evidence. | TBD | Not started |
+| FEAT-15A | 15, after Part 2 | Select and implement an AI special feature; model reference, test, live demo, and code snapshot. | TBD | Done (automated): TextRank summarization + VADER sentiment + NL agent (`chat::ai::AiEngine`, `AgentController`) in GUI and CLI; live physical demo pending. |
+| FEAT-15B | 15, after Part 2 | Select up to three other special features, then implement and verify each claimed one with a live demo and code snapshot. | TBD | Done (automated): MCP JSON-RPC 2.0 server (`McpDispatcher`, `LoopbackAgentServer`), verified TLS 1.3, and SQLite/WAL history + gapless sequence sync with on-demand GUI/CLI history loading; live physical demo pending. |
+| DEMO-16A | 16, after UI-14B | Server plus clients on two physical computers; record machines, network, version, and R1-R11 results. | TBD | Tooling ready (`tools/demo.py`); physical two-computer run pending. |
+| DEMO-16B | 16, after DEMO-16A | Final implementation-explanation slides with required code snapshots and feature evidence. | TBD | Done (automated): 20-slide HTML/PDF deck and code snapshot verifier (`tools/build_slides.py`) pass `--check`. |
 | INFRA-01A | Non-blocking, after Stage 1 | Verify macOS and Linux configure/build/test, and add CI when a remote is available; record actual platform results. | TBD | Not started |
 
 ## Next checkpoint: manual acceptance and special-feature selection

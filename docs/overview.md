@@ -20,8 +20,8 @@ bounded authorized pages plus explicit durable participant resume through the
 headless API. Periodic worker heartbeats and server idle timers clean up stale
 sessions. Stable message IDs/sequences and explicit saved-key retries are also
 implemented. Bounded worker recovery resumes identity and replays missing room
-sequences while preserving GUI drafts/transcripts. The suite has 202
-unit/socket/native-control cases. Verified TLS 1.3 and the persistent worker-backed CLI are implemented. Manual GUI
+sequences while preserving GUI drafts/transcripts. The suite has 211
+unit/socket/native-control cases. Verified TLS 1.3, the persistent worker-backed CLI, Stage 15 AI/MCP/history features, and Stage 16 slide/demo tools are implemented. Manual GUI
 walkthroughs and the physical-network
 demonstration remain pending; verified results are in [progress](progress.md).
 
@@ -45,8 +45,7 @@ fundamentals must pass before Part 3 special features are graded. See the
    group. A nonmember must not receive the group's messages.
 
 The Windows GUI provides a message view and text input/send control for each
-private and group room; see the [GUI guide](setup/gui.md). The special-feature part of the assignment also
-requires at least one AI feature. The specific AI feature has not been chosen.
+private and group room; see the [GUI guide](setup/gui.md). The special-feature part of the assignment is implemented with an embedded TextRank + VADER AI assistant, an MCP JSON-RPC 2.0 external agent server, verified TLS 1.3, and transactional SQLite/WAL history with on-demand loading; see [AI & MCP Agent](ai.md).
 
 ## Chosen engineering direction
 
@@ -69,6 +68,8 @@ behavior and socket communication, not these particular libraries.
 | [Message reliability](reliability.md) | Receipts, explicit retries, schema migration, and acceptance limits. |
 | [TLS](tls.md) | Verified transport, explicit modes, certificate generation, and LAN setup. |
 | [CLI](cli.md) | Persistent commands, receipt output, input bounds, shutdown, and API ownership. |
+| [AI & MCP Agent](ai.md) | TextRank summarization, VADER sentiment analysis, natural-language agent router, and MCP JSON-RPC 2.0 server. |
+| [Slides & Demo](slides.md) | 20-slide Implementation Explanation deck generator and two-computer LAN/agent demo launcher. |
 | [Plan](plan.md) | Stage-by-stage tasks and exit criteria. |
 | [Progress](progress.md) | What has been verified and what remains pending. |
 | [Testing](testing.md) | Automated tests and the eventual two-computer demonstration. |

@@ -82,6 +82,8 @@ TLS 1.3 verifies the server CA and DNS/IP SAN before application I/O. Executable
 require `--tls` or explicit `--plaintext-dev`; plaintext permits loopback only.
 The persistent CLI uses ChatWorker for core flows, heartbeats, and recovery;
 stdin polling/input lines and pending receipts are bounded. Unknown command enums
-are rejected. The Windows suite has 37 unit, 157 socket integration, and 8
-hidden native-control GoogleTest cases. Manual GUI/editor walkthroughs,
-physical-network verification, native CLI editing/Ctrl+C, and AI remain pending.
+are rejected. Stage 15 adds TextRank/VADER AI (`chat::ai::AiEngine`), MCP JSON-RPC 2.0
+agent tools (`McpDispatcher`, `LoopbackAgentServer`), and on-demand history loading;
+Stage 16 adds `tools/build_slides.py` and `tools/demo.py`. The Windows suite has 42 unit,
+160 socket integration, and 9 hidden native-control GoogleTest cases (211 total).
+Manual GUI/editor walkthroughs, physical-network verification, and native CLI editing/Ctrl+C remain pending.

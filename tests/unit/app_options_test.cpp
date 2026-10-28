@@ -14,9 +14,11 @@ TEST(AppOptionsTest, TlsModeAndExpectedIdentityArePreserved) {
     EXPECT_EQ(options.tls.ca_file, "C:/test certificates/ca.pem");
     EXPECT_EQ(options.tls.server_name, "chat.example");
     EXPECT_EQ(options.operands.size(), 4);
-    const auto gui = chat::transport::client_app_options({"--tls", "ca.pem"});
+    const auto gui = chat::transport::client_app_options({"--tls", "ca.pem", "--agent-port", "0"});
     EXPECT_TRUE(gui.operands.empty());
     EXPECT_TRUE(gui.tls.server_name.empty());
+    ASSERT_TRUE(gui.agent_port.has_value());
+    EXPECT_EQ(*gui.agent_port, 0U);
 }
 /// @brief Development mode is opt-in and does not inherit TLS trust or name settings.
 TEST(AppOptionsTest, PlaintextRequiresExplicitDevelopmentFlag) {
@@ -39,6 +41,8 @@ TEST(AppOptionsTest, InvalidAndMixedModesAreRejected) {
                                                {"--tls", "ca.pem", "--plaintext-dev"},
                                                {"--plaintext-dev", "--tls", "ca.pem"},
                                                {"--tls", "ca.pem", "--unknown"},
+                                               {"--plaintext-dev", "--agent-port"},
+                                               {"--plaintext-dev", "--agent-port", "70000"},
                                                {"--plaintext-dev", "--server-name", "localhost"}}) {
         EXPECT_THROW(static_cast<void>(chat::transport::client_app_options(args)),
                      std::invalid_argument);

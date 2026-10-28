@@ -27,12 +27,13 @@ int main(int argc, char* argv[]) {
         const auto options = chat::transport::client_app_options(arguments);
         auto operands = options.operands;
         const bool chat = !operands.empty() && operands[0] == "chat";
-        if (chat) {
+        const bool mcp = !operands.empty() && operands[0] == "mcp";
+        if (chat || mcp) {
             operands.erase(operands.begin());
         }
-        if (chat && operands.size() != 3) {
+        if ((chat || mcp) && operands.size() != 3) {
             throw std::invalid_argument(
-                "usage: chat_cli <transport-mode> chat <host> <port> <username>");
+                "usage: chat_cli <transport-mode> [chat|mcp] <host> <port> <username>");
         }
         if (operands.size() < 2 || operands.size() > 4) {
             throw std::invalid_argument(
@@ -50,10 +51,11 @@ int main(int argc, char* argv[]) {
         if (port == 0 || port > 65535) {
             throw std::invalid_argument("port must be between 1 and 65535");
         }
-        if (chat) {
+        if (chat || mcp) {
             chat::cli::ConsoleInput input;
             chat::cli::LineInput lines;
-            chat::cli::ChatConsole console(std::cout, {}, options.tls);
+            chat::cli::ChatConsole console(std::cout, {}, options.tls, std::chrono::seconds(5),
+                                           options.agent_port, mcp);
             if (!console.start(operands[0], static_cast<std::uint16_t>(port), operands[2])) {
                 throw std::invalid_argument("invalid chat host, port, or username");
             }
@@ -73,11 +75,19 @@ int main(int argc, char* argv[]) {
                 if (logged_in && !eof && !console.exiting() && !console.finished()) {
                     const auto chunk = input.poll();
                     for (const auto& line : lines.feed(chunk.bytes)) {
-                        console.execute(line);
+                        if (mcp) {
+                            console.execute_mcp(line);
+                        } else {
+                            console.execute(line);
+                        }
                     }
                     if (chunk.eof) {
                         for (const auto& line : lines.finish()) {
-                            console.execute(line);
+                            if (mcp) {
+                                console.execute_mcp(line);
+                            } else {
+                                console.execute(line);
+                            }
                         }
                         if (!console.exiting()) {
                             console.request_exit();

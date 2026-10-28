@@ -216,4 +216,84 @@ void RoomModel::apply(const ClientEvent& event) {
         append(*found, group.sender, group.text, group.message_id, group.room_sequence);
     }
 }
+void RoomModel::apply_history(const HistoryPage& page) {
+    if (!page.accepted || page.room_id.empty()) {
+        throw std::invalid_argument("history page was not accepted");
+    }
+    auto found = rooms_.end();
+    if (page.group) {
+        found = std::find_if(rooms_.begin(), rooms_.end(), [&](const RoomView& room) {
+            return room.group && room.target == page.room_id;
+        });
+        if (found == rooms_.end()) {
+            throw std::invalid_argument("group history precedes discovery");
+        }
+    } else {
+        for (const auto& record : page.records) {
+            if (record.sender != username_ && record.recipient != username_) {
+                throw std::invalid_argument("direct history does not identify this user");
+            }
+        }
+        found = std::find_if(rooms_.begin(), rooms_.end(), [&](const RoomView& room) {
+            return !room.group && room.wire_id == page.room_id;
+        });
+        if (found == rooms_.end()) {
+            if (page.records.empty()) {
+                return;
+            }
+            const auto& first = page.records.front();
+            const auto peer = first.sender == username_ ? first.recipient : first.sender;
+            found = std::find_if(rooms_.begin(), rooms_.end(), [&](const RoomView& room) {
+                return !room.group && room.target == peer && room.wire_id.empty() && room.available;
+            });
+            if (found == rooms_.end()) {
+                RoomView room;
+                room.key = "direct-view-" + std::to_string(++next_room_);
+                room.target = peer;
+                room.title = "Direct: " + peer;
+                room.available = contains(users_, peer);
+                add(std::move(room));
+                found = std::prev(rooms_.end());
+            }
+            found->wire_id = page.room_id;
+        }
+    }
+    for (const auto& record : page.records) {
+        if (record.sender.size() > 32 || record.text.empty() || record.text.size() > 4096 ||
+            record.message_id.size() > 128) {
+            throw std::invalid_argument("invalid history record fields");
+        }
+        const bool duplicate =
+            std::any_of(found->lines.begin(), found->lines.end(), [&](const ChatLine& line) {
+                return (!record.message_id.empty() && line.message_id == record.message_id) ||
+                       (record.room_sequence != 0 && line.room_sequence == record.room_sequence);
+            });
+        if (duplicate) {
+            continue;
+        }
+        bytes_ += record.sender.size() + record.text.size() + record.message_id.size();
+        const auto pos =
+            record.room_sequence == 0
+                ? found->lines.end()
+                : std::find_if(found->lines.begin(), found->lines.end(), [&](const ChatLine& line) {
+                      return line.room_sequence > record.room_sequence;
+                  });
+        found->lines.insert(pos, {record.sender, record.text, ++next_line_, record.message_id,
+                                  record.room_sequence});
+        found->last_sequence = std::max(found->last_sequence, record.room_sequence);
+        if (found->lines.size() > 100) {
+            trim_front(*found);
+        }
+        while (bytes_ > kMaxBytes) {
+            RoomView* oldest = nullptr;
+            for (auto& candidate : rooms_) {
+                if (!candidate.lines.empty() &&
+                    (!oldest || candidate.lines.front().order < oldest->lines.front().order)) {
+                    oldest = &candidate;
+                }
+            }
+            trim_front(*oldest);
+        }
+    }
+}
 } // namespace chat::client

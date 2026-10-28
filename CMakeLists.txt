@@ -68,6 +68,8 @@ add_library(chat_transport STATIC
     src/client/ping_client.cpp
     src/client/chat_worker.cpp
     src/client/room_model.cpp
+    src/ai/ai_engine.cpp
+    src/ai/agent_tools.cpp
 )
 add_library(chat::transport ALIAS chat_transport)
 target_link_libraries(chat_transport PUBLIC chat::shared Boost::asio Threads::Threads OpenSSL::SSL)
@@ -135,6 +137,7 @@ if(BUILD_TESTING)
         tests/unit/room_model_test.cpp
         tests/unit/app_options_test.cpp
         tests/unit/cli_test.cpp
+        tests/unit/ai_test.cpp
     )
     target_link_libraries(chat_tests PRIVATE chat_cli_view GTest::gtest_main)
     chat_set_project_warnings(chat_tests)
@@ -158,6 +161,7 @@ if(BUILD_TESTING)
         tests/integration/recovery_test.cpp
         tests/integration/tls_test.cpp
         tests/integration/cli_test.cpp
+        tests/integration/agent_test.cpp
     )
     target_link_libraries(chat_integration_tests PRIVATE chat_cli_view GTest::gtest_main)
     chat_set_project_warnings(chat_integration_tests)

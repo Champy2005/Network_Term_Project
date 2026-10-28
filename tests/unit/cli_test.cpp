@@ -18,14 +18,21 @@ TEST(CliSyntaxTest, CoreFlowsAndLiteralText) {
     EXPECT_EQ(dm.target, "bob");
     EXPECT_EQ(dm.text, "hello $HOME; `literal`  ");
     EXPECT_EQ(parse_command("/group group-1 hello").action, Action::group);
+    EXPECT_EQ(parse_command("/history group-1").action, Action::history);
+    EXPECT_EQ(parse_command("/summarize").action, Action::summarize);
+    EXPECT_EQ(parse_command("/summarize group-1").target, "group-1");
+    EXPECT_EQ(parse_command("/sentiment great job!").action, Action::sentiment);
+    EXPECT_EQ(parse_command("/ai summarize this room").action, Action::ai);
     EXPECT_EQ(parse_command("/help").action, Action::help);
     EXPECT_EQ(parse_command("/quit").action, Action::quit);
     EXPECT_EQ(parse_command(" \t").action, Action::empty);
 }
 /// @brief Invalid verbs, missing values, and extra local-command arguments never queue sends.
 TEST(CliSyntaxTest, InvalidCommandsAreRejected) {
-    for (const auto* line : {"hello", "/unknown", "/dm", "/dm bob", "/group group-1", "/join",
-                             "/create", "/users extra", "/quit extra", "/members a b"}) {
+    for (const auto* line :
+         {"hello", "/unknown", "/dm", "/dm bob", "/group group-1", "/join", "/history",
+          "/sentiment", "/ai", "/summarize a b", "/create", "/users extra", "/quit extra",
+          "/members a b"}) {
         EXPECT_THROW(static_cast<void>(parse_command(line)), std::invalid_argument) << line;
     }
 }

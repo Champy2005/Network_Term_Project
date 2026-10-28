@@ -18,15 +18,16 @@ if (-not (Test-Path -LiteralPath $taskVswhere)) {
 $taskVs = & $taskVswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (-not $taskVs) { throw 'No Visual Studio C++ toolchain found.' }
 & (Join-Path $taskVs 'Common7/Tools/Launch-VsDevShell.ps1') -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
-if (-not $env:VCPKG_ROOT) {
-    $taskBundledVcpkg = Join-Path $taskVs 'VC/vcpkg'
+if (-not $env:VCPKG_ROOT -or $env:VCPKG_ROOT -eq (Join-Path $taskVs 'VC\vcpkg')) {
+    $taskBundledVcpkg = if (Test-Path -LiteralPath (Join-Path $HOME 'src/vcpkg/scripts/buildsystems/vcpkg.cmake')) { Join-Path $HOME 'src/vcpkg' } else { Join-Path $taskVs 'VC/vcpkg' }
     if (Test-Path -LiteralPath "$taskBundledVcpkg/scripts/buildsystems/vcpkg.cmake") {
         $env:VCPKG_ROOT = $taskBundledVcpkg
     } else { throw 'Set VCPKG_ROOT to your vcpkg checkout (see docs/setup/windows.md).' }
 }
 $taskCmakeBin = Join-Path $taskVs 'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin'
 $taskNinjaBin = Join-Path $taskVs 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja'
-$env:PATH = "$taskCmakeBin;$taskNinjaBin;$env:PATH"
+$taskCleanPath = ($env:PATH -split ';' | Where-Object { $_ -and ($_ -notmatch 'msys64') }) -join ';'
+$env:PATH = "$taskCmakeBin;$taskNinjaBin;$taskCleanPath"
 Push-Location $taskRoot
 try {
     & cmake --preset $Preset

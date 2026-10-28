@@ -362,4 +362,75 @@ TEST_F(GuiTlsTest, CertificateFailureShowsStatusWithoutConnectingOrDowngrading) 
     EXPECT_TRUE(IsWindowEnabled(GetDlgItem(window.handle(), chat::gui::connect)));
     EXPECT_FALSE(IsWindowEnabled(GetDlgItem(window.handle(), chat::gui::send)));
 }
+/// @brief Native history button, AI summarize/sentiment controls, and loopback MCP agent control
+/// work over verified TLS.
+TEST_F(GuiTlsTest, HistoryAiAndLoopbackAgentControlsWorkOverVerifiedTls) {
+    chat::client::ChatClient creator(certificates.client());
+    creator.connect("127.0.0.1", server.port());
+    ASSERT_TRUE(creator.login("bob").accepted);
+    const auto created = creator.create_group("AI Room");
+    ASSERT_TRUE(created.accepted);
+    ASSERT_TRUE(
+        creator.send_group(created.resource_id, "TLS 1.3 socket framing is great and fast!")
+            .accepted);
+
+    chat::gui::Window window(false, {}, certificates.client("localhost"), std::uint16_t{0});
+    ASSERT_GT(window.agent_port(), 0U);
+    connect(window);
+    ASSERT_TRUE(until(window, [&] {
+        return window.model().users().size() == 2 && window.model().groups().size() == 1;
+    }));
+    select(window, chat::gui::groups, 0);
+    EXPECT_FALSE(IsWindowEnabled(GetDlgItem(window.handle(), chat::gui::load_history)));
+    click(window, chat::gui::join_group);
+    ASSERT_TRUE(until(window, [&] {
+        return window.model().current() && window.model().current()->joined;
+    }));
+    EXPECT_TRUE(IsWindowEnabled(GetDlgItem(window.handle(), chat::gui::load_history)));
+    click(window, chat::gui::load_history);
+    ASSERT_TRUE(until(window, [&] {
+        return window.model().current()->lines.size() == 1 &&
+               caption(window, chat::gui::transcript).find(L"TLS 1.3 socket framing") !=
+                   std::wstring::npos;
+    }));
+
+    click(window, chat::gui::ai_summarize);
+    EXPECT_NE(caption(window, chat::gui::ai_output).find(L"AI Summary"), std::wstring::npos);
+
+    click(window, chat::gui::ai_actions);
+    EXPECT_NE(caption(window, chat::gui::ai_output).find(L"AI Insights"), std::wstring::npos);
+
+    click(window, chat::gui::ai_smart_reply);
+    EXPECT_FALSE(caption(window, chat::gui::message).empty());
+
+    input(window, chat::gui::message, L"pls check the build thx");
+    click(window, chat::gui::ai_polish);
+    EXPECT_NE(caption(window, chat::gui::message).find(L"Please check"), std::wstring::npos);
+
+    input(window, chat::gui::message, L"@ai who is online?");
+    click(window, chat::gui::send);
+    EXPECT_NE(caption(window, chat::gui::ai_output).find(L"Connected users"), std::wstring::npos);
+
+    input(window, chat::gui::ai_prompt, L"Everything is working wonderfully!");
+    click(window, chat::gui::ai_sentiment);
+    EXPECT_NE(caption(window, chat::gui::ai_output).find(L"Positive"), std::wstring::npos);
+
+    boost::asio::io_context mcp_io;
+    boost::asio::ip::tcp::socket mcp_socket(mcp_io);
+    mcp_socket.connect({boost::asio::ip::address_v4::loopback(), window.agent_port()});
+    const std::string request =
+        R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_agent_prompt","arguments":{"prompt":"dm bob Hello from GUI MCP connector"}}})"
+        "\n";
+    boost::asio::write(mcp_socket, boost::asio::buffer(request));
+    bool bob_received = false;
+    ASSERT_TRUE(until(window, [&] {
+        if (auto event = creator.next_event(10ms)) {
+            if (const auto* dm = std::get_if<chat::client::DirectDelivery>(&*event)) {
+                bob_received = dm->text == "Hello from GUI MCP connector";
+            }
+        }
+        return bob_received;
+    }));
+    mcp_socket.close();
+}
 } // namespace
